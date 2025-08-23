@@ -15,23 +15,10 @@ const WorkflowBuilderPage = () => {
   const [users, setUsers] = useState<User[]>([])
   const [availableSteps, setAvailableSteps] = useState<ApiWorkflowStep[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [showCreateForm, setShowCreateForm] = useState(false)
   const [showCustomBuilder, setShowCustomBuilder] = useState(false)
-  const [showEditWorkflow, setShowEditWorkflow] = useState(false)
-  const [editingWorkflow, setEditingWorkflow] = useState<WorkflowTemplate | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<WorkflowTemplate | null>(null)
   const [showEditStep, setShowEditStep] = useState(false)
   const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null)
-  const [selectedJob, setSelectedJob] = useState<string>('')
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
-
-  // Form states
-  const [workflowForm, setWorkflowForm] = useState({
-    name: '',
-    description: '',
-    jobId: '',
-    templateId: ''
-  })
 
   // Step type descriptions (hardcoded)
   const stepTypeDescriptions = {
@@ -260,11 +247,7 @@ const WorkflowBuilderPage = () => {
 
 
 
-  const handleCancelEditWorkflow = () => {
-    setShowEditWorkflow(false)
-    setEditingWorkflow(null)
-    setCustomWorkflow({ name: '', description: '', steps: [] })
-  }
+
 
   const handleEditTemplate = (template: WorkflowTemplate) => {
     // Convert template to custom workflow format for editing
@@ -348,13 +331,7 @@ const WorkflowBuilderPage = () => {
     }
   }
 
-  const getApproverNames = (approverIds: string[]) => {
-    if (!approverIds || approverIds.length === 0) return 'None'
-    return approverIds.map(id => {
-      const user = users.find(u => u.id === id)
-      return user ? `${user.firstName} ${user.lastName}` : 'Unknown User'
-    }).join(', ')
-  }
+
 
   if (isLoading) {
     return (
@@ -386,7 +363,7 @@ const WorkflowBuilderPage = () => {
             onClick={() => setShowCustomBuilder(true)}
           >
             <span className="mr-2">⚡</span>
-            Create Workflow
+            Create Workflow Template
           </Button>
         </div>
       </div>
@@ -545,9 +522,9 @@ const WorkflowBuilderPage = () => {
           <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <Card>
               <CardHeader>
-                <CardTitle>{editingTemplate ? 'Edit Workflow Template' : 'Create Workflow'}</CardTitle>
+                <CardTitle>{editingTemplate ? 'Edit Workflow Template' : 'Create Workflow Template'}</CardTitle>
                 <CardDescription>
-                  {editingTemplate ? 'Modify your existing workflow template' : 'Build custom workflow after you receive your email'}
+                  {editingTemplate ? 'Modify your existing workflow template' : 'Build a custom workflow template for your hiring process'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -785,14 +762,6 @@ const WorkflowBuilderPage = () => {
                   )}
 
                   <div className="flex gap-4 pt-6 border-t border-border">
-                    <Button
-                      type="submit"
-                      disabled={customWorkflow.steps.length === 0}
-                      className="flex-1 bg-gradient-hero hover:bg-gradient-hero/90"
-                    >
-                      Create Workflow
-                    </Button>
-                    
                     <Button
                       type="button"
                       variant="outline"
