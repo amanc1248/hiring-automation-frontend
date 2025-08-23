@@ -2,10 +2,6 @@ import type {
   EmailAccount, 
   EmailCreateData, 
   EmailUpdateData, 
-  EmailFilterRule, 
-  EmailMonitoringConfig, 
-  EmailTemplate, 
-  EmailIntegration,
   EmailStats 
 } from '../types/email'
 import { gmailApiService, type GmailConfig } from './gmailApiService'
@@ -36,50 +32,7 @@ const mockEmailAccounts: EmailAccount[] = [
   }
 ]
 
-const mockEmailTemplates: EmailTemplate[] = [
-  {
-    id: 'template-1',
-    companyId: 'comp-1',
-    name: 'Application Received',
-    type: 'application_received',
-    subject: 'Thank you for your application - {job_title}',
-    body: `Dear {candidate_name},
 
-Thank you for your interest in the {job_title} position at {company_name}.
-
-We have received your application and our AI system is currently reviewing your resume. You will hear from us within 24-48 hours with next steps.
-
-Best regards,
-{company_name} Hiring Team`,
-    variables: ['candidate_name', 'job_title', 'company_name'],
-    isDefault: true,
-    createdAt: '2024-01-10T10:00:00Z',
-    updatedAt: '2024-01-10T10:00:00Z'
-  },
-  {
-    id: 'template-2',
-    companyId: 'comp-1',
-    name: 'Resume Reviewed - Next Steps',
-    type: 'resume_reviewed',
-    subject: 'Your application has been reviewed - {job_title}',
-    body: `Dear {candidate_name},
-
-Great news! Your application for the {job_title} position has been reviewed and we'd like to move forward.
-
-Next steps:
-1. Complete the technical assessment (link will be sent separately)
-2. Schedule a technical interview with our AI system
-
-Please check your email for the assessment link and interview scheduling details.
-
-Best regards,
-{company_name} Hiring Team`,
-    variables: ['candidate_name', 'job_title', 'company_name'],
-    isDefault: false,
-    createdAt: '2024-01-10T10:00:00Z',
-    updatedAt: '2024-01-10T10:00:00Z'
-  }
-]
 
 const mockEmailStats: EmailStats = {
   totalEmails: 156,
@@ -172,24 +125,7 @@ export const emailService = {
     return true
   },
 
-  // Email Templates
-  async getEmailTemplates(companyId: string): Promise<EmailTemplate[]> {
-    await delay(400)
-    return mockEmailTemplates.filter(template => template.companyId === companyId)
-  },
 
-  async createEmailTemplate(template: Omit<EmailTemplate, 'id' | 'companyId' | 'createdAt' | 'updatedAt'>, companyId: string): Promise<EmailTemplate> {
-    await delay(700)
-    const newTemplate: EmailTemplate = {
-      ...template,
-      id: `template-${Date.now()}`,
-      companyId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    mockEmailTemplates.push(newTemplate)
-    return newTemplate
-  },
 
   // Email Stats
   async getEmailStats(companyId: string): Promise<EmailStats> {

@@ -34,18 +34,7 @@ export interface EmailMonitoringConfig {
   isActive: boolean
 }
 
-export interface EmailTemplate {
-  id: string
-  companyId: string
-  name: string
-  type: 'application_received' | 'resume_reviewed' | 'interview_scheduled' | 'rejection' | 'offer'
-  subject: string
-  body: string
-  variables: string[] // e.g., ['candidate_name', 'job_title', 'company_name']
-  isDefault: boolean
-  createdAt: string
-  updatedAt: string
-}
+
 
 export interface EmailIntegration {
   id: string
