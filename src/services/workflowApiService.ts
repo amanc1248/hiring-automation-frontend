@@ -67,7 +67,7 @@ class WorkflowApiService {
   }
 
   /**
-   * Get all workflow templates
+   * Get all workflow templates with populated step details
    */
   async getWorkflowTemplates(): Promise<WorkflowTemplate[]> {
     const response = await apiClient.get('/api/workflows/templates');
@@ -103,10 +103,22 @@ class WorkflowApiService {
   }
 
   /**
-   * Update an existing workflow template
+   * Update an existing workflow template with step details
    */
-  async updateWorkflowTemplate(id: string, template: Partial<Omit<WorkflowTemplate, 'id' | 'created_at' | 'updated_at'>>): Promise<WorkflowTemplate> {
-    const response = await apiClient.put(`/api/workflows/templates/${id}`, template);
+  async updateWorkflowTemplate(id: string, templateData: {
+    name: string;
+    description?: string;
+    category: string;
+    steps: Array<{
+      workflow_step_id: string;
+      delay_in_seconds?: number;
+      auto_start: boolean;
+      required_human_approval: boolean;
+      number_of_approvals_needed?: number;
+      order_number: number;
+    }>;
+  }): Promise<WorkflowTemplate> {
+    const response = await apiClient.put(`/api/workflows/templates/${id}`, templateData);
     return response.data;
   }
 

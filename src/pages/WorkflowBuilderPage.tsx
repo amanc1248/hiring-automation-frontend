@@ -4,16 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { useAuth } from '../hooks/useAuth'
 import { workflowService } from '../services/workflowService'
 import { workflowApiService, type WorkflowStep as ApiWorkflowStep } from '../services/workflowApiService'
-import { jobService } from '../services/jobService'
 import { userApiService } from '../services/userApiService'
-import type { Workflow, WorkflowStep, WorkflowTemplate, WorkflowStats } from '../types/workflow'
-import type { JobPosting } from '../types/job'
+import type { WorkflowStep, WorkflowTemplate, WorkflowStats } from '../types/workflow'
 import type { User } from '../types/user'
 
 const WorkflowBuilderPage = () => {
   const { company } = useAuth()
-  const [workflows, setWorkflows] = useState<Workflow[]>([])
-  const [jobs, setJobs] = useState<JobPosting[]>([])
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([])
   const [stats, setStats] = useState<WorkflowStats | null>(null)
   const [users, setUsers] = useState<User[]>([])
@@ -22,7 +18,7 @@ const WorkflowBuilderPage = () => {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [showCustomBuilder, setShowCustomBuilder] = useState(false)
   const [showEditWorkflow, setShowEditWorkflow] = useState(false)
-  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null)
+  const [editingWorkflow, setEditingWorkflow] = useState<WorkflowTemplate | null>(null)
   const [showEditStep, setShowEditStep] = useState(false)
   const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null)
   const [selectedJob, setSelectedJob] = useState<string>('')
@@ -85,16 +81,12 @@ const WorkflowBuilderPage = () => {
     if (!company) return
     setIsLoading(true)
     try {
-      const [workflowsData, jobsData, templatesData, statsData, usersData, availableStepsData] = await Promise.all([
-        workflowService.getWorkflows(company.id),
-        jobService.getJobs(company.id),
+      const [templatesData, statsData, usersData, availableStepsData] = await Promise.all([
         workflowService.getWorkflowTemplates(),
         workflowService.getWorkflowStats(company.id),
         userApiService.getUsers({ limit: 100, status_filter: 'active' }),
         workflowApiService.getWorkflowSteps()
       ])
-      setWorkflows(workflowsData)
-      setJobs(jobsData)
       setTemplates(templatesData)
       setStats(statsData)
       console.log('Users data received:', usersData)
@@ -107,46 +99,7 @@ const WorkflowBuilderPage = () => {
     }
   }
 
-  const handleCreateWorkflow = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!company || !workflowForm.jobId || !workflowForm.templateId) return
 
-    try {
-      const template = templates.find(t => t.id === workflowForm.templateId)
-      if (!template) {
-        alert('Selected template not found')
-        return
-      }
-
-      const newWorkflow = await workflowService.createWorkflow({
-        name: workflowForm.name,
-        description: workflowForm.description,
-        jobId: workflowForm.jobId,
-        steps: template.steps
-      }, company.id)
-
-      setWorkflows(prev => [...prev, newWorkflow])
-      setShowCreateForm(false)
-      setWorkflowForm({ name: '', description: '', jobId: '', templateId: '' })
-      alert('Workflow created successfully!')
-    } catch (error) {
-      console.error('Failed to create workflow:', error)
-      alert('Failed to create workflow. Please try again.')
-    }
-  }
-
-  const handleDeleteWorkflow = async (workflowId: string) => {
-    if (confirm('Are you sure you want to delete this workflow?')) {
-      try {
-        await workflowService.deleteWorkflow(workflowId)
-        setWorkflows(prev => prev.filter(w => w.id !== workflowId))
-        alert('Workflow deleted successfully!')
-      } catch (error) {
-        console.error('Failed to delete workflow:', error)
-        alert('Failed to delete workflow. Please try again.')
-      }
-    }
-  }
 
   const handleSaveAsTemplate = async () => {
     if (!customWorkflow.name || customWorkflow.steps.length === 0) {
@@ -197,51 +150,7 @@ const WorkflowBuilderPage = () => {
     }
   }
 
-  const handleCreateCustomWorkflow = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!company || customWorkflow.steps.length === 0) {
-      alert('Please fill in all required fields and add at least one step.')
-      return
-    }
 
-    try {
-      const workflowSteps = customWorkflow.steps.map((step, index) => ({
-        name: step.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()), // Generate name from type
-        description: step.description,
-        type: step.type,
-        order: index + 1,
-        isActive: true,
-        status: 'pending' as const,
-        config: {
-          delayBeforeExecution: step.delayHours,
-          requiresApproval: step.requiresApproval,
-          approvers: step.approvers || [],
-          autoProceed: !step.requiresApproval
-        },
-        aiEmail: {
-          enabled: false,
-          subjectTemplate: '',
-          bodyTemplate: '',
-          variables: []
-        }
-      }))
-
-      const newWorkflow = await workflowService.createWorkflow({
-        name: customWorkflow.name,
-        description: customWorkflow.description,
-        jobId: '', // Workflows are now generic templates
-        steps: workflowSteps
-      }, company.id)
-
-      setWorkflows(prev => [...prev, newWorkflow])
-      setShowCustomBuilder(false)
-      setCustomWorkflow({ name: '', description: '', steps: [] })
-      alert('Custom workflow created successfully!')
-    } catch (error) {
-      console.error('Failed to create custom workflow:', error)
-      alert('Failed to create custom workflow. Please try again.')
-    }
-  }
 
   const handleAddStep = () => {
     if (!newStep.description.trim()) {
@@ -334,73 +243,9 @@ const WorkflowBuilderPage = () => {
     setShowEditStep(false)
   }
 
-  const handleEditWorkflow = (workflow: Workflow) => {
-    setEditingWorkflow(workflow)
-    setCustomWorkflow({
-      name: workflow.name,
-      description: workflow.description,
-      steps: workflow.steps.map(step => ({
-        name: step.name,
-        description: step.description,
-        type: step.type,
-        delayHours: step.config.delayBeforeExecution || 0,
-        requiresApproval: step.config.requiresApproval,
-        approvers: step.config.approvers || [],
-        numberOfApprovalsNeeded: 1,
-        autoStart: false
-      }))
-    })
-    setShowEditWorkflow(true)
-  }
 
-  const handleUpdateWorkflow = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!company || !editingWorkflow || customWorkflow.steps.length === 0) {
-      alert('Please fill in all required fields and add at least one step.')
-      return
-    }
 
-    try {
-      const workflowSteps = customWorkflow.steps.map((step, index) => ({
-        name: step.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        description: step.description,
-        type: step.type,
-        order: index + 1,
-        isActive: true,
-        status: 'pending' as const,
-        config: {
-          delayBeforeExecution: step.delayHours,
-          requiresApproval: step.requiresApproval,
-          approvers: step.approvers || [],
-          autoProceed: !step.requiresApproval
-        },
-        aiEmail: {
-          enabled: false,
-          subjectTemplate: '',
-          bodyTemplate: '',
-          variables: []
-        }
-      }))
 
-      const updatedWorkflow = await workflowService.updateWorkflow(editingWorkflow.id, {
-        name: customWorkflow.name,
-        description: customWorkflow.description,
-        jobId: editingWorkflow.jobId,
-        steps: workflowSteps
-      })
-
-      if (updatedWorkflow) {
-        setWorkflows(prev => prev.map(w => w.id === editingWorkflow.id ? updatedWorkflow : w))
-        setShowEditWorkflow(false)
-        setEditingWorkflow(null)
-        setCustomWorkflow({ name: '', description: '', steps: [] })
-        alert('Workflow updated successfully!')
-      }
-    } catch (error) {
-      console.error('Failed to update workflow:', error)
-      alert('Failed to update workflow. Please try again.')
-    }
-  }
 
   const handleCancelEditWorkflow = () => {
     setShowEditWorkflow(false)
@@ -602,182 +447,9 @@ const WorkflowBuilderPage = () => {
         </div>
       </div>
 
-      {/* Existing Workflows */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-foreground">Job Workflows</h2>
-        </div>
 
-        {workflows.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">No workflows created yet.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {workflows.map((workflow) => {
-              const job = jobs.find(j => j.id === workflow.jobId)
-              return (
-                <Card key={workflow.id} className="card-hover">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold text-foreground">{workflow.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Job: {job?.title || 'Unknown Job'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">{workflow.description}</p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          workflow.isActive ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                        }`}>
-                          {workflow.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEditWorkflow(workflow)}
-                        >
-                          <span className="mr-1">✏️</span>
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteWorkflow(workflow.id)}
-                          className="border-destructive text-destructive hover:bg-destructive/10"
-                        >
-                          <span className="mr-1">🗑️</span>
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-medium text-foreground">Workflow Steps:</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {workflow.steps.map((step, index) => (
-                          <div
-                            key={step.id}
-                            className="flex items-center space-x-2 px-3 py-2 bg-muted rounded-lg text-sm"
-                          >
-                            <span className="text-muted-foreground font-medium">{index + 1}</span>
-                            <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStepColor(step.type)}`}>
-                              <span>{getStepIcon(step.type)}</span>
-                              <span>{step.name}</span>
-                            </span>
-                            {step.config.requiresApproval && (
-                              <span className="text-xs text-warning">👤 Approval</span>
-                            )}
-                            {step.config.delayBeforeExecution && step.config.delayBeforeExecution > 0 && (
-                              <span className="text-xs text-blue-600">⏰ {step.config.delayBeforeExecution}h</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        )}
-      </div>
 
-      {/* Create Workflow Modal */}
-      {showCreateForm && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl">
-            <Card>
-              <CardHeader>
-                <CardTitle>Create New Workflow</CardTitle>
-                <CardDescription>
-                  Set up an automated hiring workflow for a specific job
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCreateWorkflow} className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Workflow Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={workflowForm.name}
-                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                      placeholder="e.g., Senior Developer Hiring Workflow"
-                    />
-                  </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Description</label>
-                    <textarea
-                      value={workflowForm.description}
-                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, description: e.target.value }))}
-                      rows={3}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                      placeholder="Describe what this workflow does..."
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Select Job</label>
-                    <select
-                      required
-                      value={workflowForm.jobId}
-                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, jobId: e.target.value }))}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                    >
-                      <option value="">Choose a job</option>
-                      {jobs.map((job) => (
-                        <option key={job.id} value={job.id}>
-                          {job.title} - {job.department}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Select Template</label>
-                    <select
-                      required
-                      value={workflowForm.templateId}
-                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, templateId: e.target.value }))}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                    >
-                      <option value="">Choose a template</option>
-                      {templates.map((template) => (
-                        <option key={template.id} value={template.id}>
-                          {template.name} ({template.category})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex gap-4 pt-4 border-t border-border">
-                    <Button
-                      type="submit"
-                      className="flex-1 bg-gradient-hero hover:bg-gradient-hero/90"
-                    >
-                      Create Workflow
-                    </Button>
-                    
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowCreateForm(false)}
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
 
       {/* Custom Workflow Builder Modal */}
       {showCustomBuilder && (
@@ -791,7 +463,7 @@ const WorkflowBuilderPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleCreateCustomWorkflow} className="space-y-6">
+                <div className="space-y-6">
                   {/* Basic Info */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Workflow Name *</label>
@@ -1051,274 +723,7 @@ const WorkflowBuilderPage = () => {
                       Cancel
                     </Button>
                   </div>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Workflow Modal */}
-      {showEditWorkflow && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <Card>
-              <CardHeader>
-                <CardTitle>Edit Workflow: {editingWorkflow?.name}</CardTitle>
-                <CardDescription>
-                  Modify your existing workflow configuration
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleUpdateWorkflow} className="space-y-6">
-                  {/* Basic Info */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Workflow Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={customWorkflow.name}
-                      onChange={(e) => setCustomWorkflow(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                      placeholder="e.g., Engineering Hiring Workflow"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Description</label>
-                    <textarea
-                      value={customWorkflow.description}
-                      onChange={(e) => setCustomWorkflow(prev => ({ ...prev, description: e.target.value }))}
-                      rows={3}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                      placeholder="Describe what this workflow does..."
-                    />
-                  </div>
-
-                  {/* Add New Step */}
-                  <div className="border border-border rounded-lg p-4 space-y-4">
-                    <h3 className="text-lg font-semibold text-foreground">Add Workflow Step</h3>
-                    
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Step Type</label>
-                      <select
-                        value={newStep.type}
-                        onChange={(e) => {
-                          const selectedStep = availableSteps.find(step => step.id === e.target.value)
-                          setNewStep(prev => ({ 
-                            ...prev, 
-                            type: e.target.value as any,
-                            description: selectedStep?.description || prev.description
-                          }))
-                        }}
-                        className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                      >
-
-                        <option value="">Select a workflow step...</option>
-                        {availableSteps.map((step) => (
-                          <option key={step.id} value={step.id}>
-                            {getStepIcon(step.step_type)} {step.name}
-                          </option>
-                        ))}
-                        <option value="custom">⚙️ Custom Action</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Description</label>
-                      <input
-                        type="text"
-                        value={newStep.description}
-                        onChange={(e) => setNewStep(prev => ({ ...prev, description: e.target.value }))}
-                        className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                        placeholder="What does this step do?"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground">Delay (hours)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="168"
-                          value={newStep.delayHours}
-                          onChange={(e) => setNewStep(prev => ({ ...prev, delayHours: parseInt(e.target.value) || 0 }))}
-                          className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                          placeholder="0"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground">Approvers</label>
-                        <select
-                          multiple
-                          value={newStep.approvers}
-                          onChange={(e) => {
-                            const selectedOptions = Array.from(e.target.selectedOptions, option => option.value)
-                            setNewStep(prev => ({ ...prev, approvers: selectedOptions }))
-                          }}
-                          className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth min-h-[100px]"
-                        >
-                          {users.filter(user => user.role.name !== 'admin').length === 0 ? (
-                            <option disabled>No non-admin users available</option>
-                          ) : (
-                            users
-                              .filter(user => user.role.name !== 'admin')
-                              .map(user => (
-                                <option key={user.id} value={user.id}>
-                                  {user.firstName} {user.lastName} ({user.role.displayName})
-                                </option>
-                              ))
-                          )}
-                        </select>
-                        <p className="text-xs text-muted-foreground">Hold Ctrl/Cmd to select multiple users</p>
-                      </div>
-
-                      <div className="space-y-3 pt-6">
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newStep.requiresApproval}
-                            onChange={(e) => setNewStep(prev => ({ ...prev, requiresApproval: e.target.checked }))}
-                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
-                          />
-                          <span className="text-sm text-foreground">Requires Approval</span>
-                        </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newStep.autoStart}
-                            onChange={(e) => setNewStep(prev => ({ ...prev, autoStart: e.target.checked }))}
-                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
-                          />
-                          <span className="text-sm text-foreground">Auto Start</span>
-                        </div>
-                        
-
-                      </div>
-                    </div>
-
-                    {/* Number of Approvals Needed - Show only when requires approval is checked */}
-                    {newStep.requiresApproval && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground">Number of Approvals Needed</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="10"
-                          value={newStep.numberOfApprovalsNeeded}
-                          onChange={(e) => setNewStep(prev => ({ ...prev, numberOfApprovalsNeeded: parseInt(e.target.value) || 1 }))}
-                          className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                          placeholder="1"
-                        />
-                        <p className="text-xs text-muted-foreground">How many approvals are required to proceed</p>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        onClick={editingStepIndex !== null ? handleUpdateStep : handleAddStep}
-                        className="flex-1 bg-primary hover:bg-primary/90"
-                      >
-                        <span className="mr-2">
-                          {editingStepIndex !== null ? '✏️' : '➕'}
-                        </span>
-                        {editingStepIndex !== null ? 'Update Step' : 'Add Step to Workflow'}
-                      </Button>
-                      
-                      {editingStepIndex !== null && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleCancelEdit}
-                          className="px-6"
-                        >
-                          Cancel
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Current Steps */}
-                  {customWorkflow.steps.length > 0 && (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-foreground">Workflow Steps ({customWorkflow.steps.length})</h3>
-                      <div className="space-y-3">
-                        {customWorkflow.steps.map((step, index) => (
-                          <div key={index} className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                            <div className="flex items-center space-x-4">
-                              <span className="text-sm font-medium text-muted-foreground">#{index + 1}</span>
-                              <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStepColor(step.type)}`}>
-                                <span>{getStepIcon(step.type)}</span>
-                                <span>{step.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
-                              </span>
-                              <div className="text-sm text-muted-foreground">
-                                {step.description}
-                              </div>
-                              <div className="flex items-center space-x-2 text-xs">
-                                {step.delayHours > 0 && (
-                                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                    ⏰ {step.delayHours}h
-                                  </span>
-                                )}
-                                {step.requiresApproval && (
-                                  <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                                    👤 Approval
-                                  </span>
-                                  )}
-
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEditStep(index)}
-                                className="border-primary text-primary hover:bg-primary/10"
-                              >
-                                <span className="mr-1">✏️</span>
-                                Edit
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleRemoveStep(index)}
-                                className="border-destructive text-destructive hover:bg-destructive/10"
-                              >
-                                <span className="mr-1">🗑️</span>
-                                Remove
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex gap-4 pt-6 border-t border-border">
-                    <Button
-                      type="submit"
-                      disabled={customWorkflow.steps.length === 0}
-                      className="flex-1 bg-gradient-hero hover:bg-gradient-hero/90"
-                    >
-                      Update Workflow
-                    </Button>
-                    
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleCancelEditWorkflow}
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
+                </div>
               </CardContent>
             </Card>
           </div>
