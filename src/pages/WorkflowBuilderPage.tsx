@@ -19,6 +19,7 @@ const WorkflowBuilderPage = () => {
   const [showCustomBuilder, setShowCustomBuilder] = useState(false)
   const [showEditWorkflow, setShowEditWorkflow] = useState(false)
   const [editingWorkflow, setEditingWorkflow] = useState<WorkflowTemplate | null>(null)
+  const [editingTemplate, setEditingTemplate] = useState<WorkflowTemplate | null>(null)
   const [showEditStep, setShowEditStep] = useState(false)
   const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null)
   const [selectedJob, setSelectedJob] = useState<string>('')
@@ -137,8 +138,20 @@ const WorkflowBuilderPage = () => {
         steps: steps
       }
 
-      await workflowApiService.createWorkflowTemplateWithSteps(templateData)
-      alert('Workflow template saved successfully!')
+      if (editingTemplate) {
+        // Update existing template
+        await workflowApiService.updateWorkflowTemplate(editingTemplate.id, templateData)
+        alert('Workflow template updated successfully!')
+      } else {
+        // Create new template
+        await workflowApiService.createWorkflowTemplateWithSteps(templateData)
+        alert('Workflow template saved successfully!')
+      }
+      
+      // Reset form and close modal
+      setCustomWorkflow({ name: '', description: '', steps: [] })
+      setEditingTemplate(null)
+      setShowCustomBuilder(false)
       
       // Refresh templates list
       const updatedTemplates = await workflowService.getWorkflowTemplates()
@@ -251,6 +264,42 @@ const WorkflowBuilderPage = () => {
     setShowEditWorkflow(false)
     setEditingWorkflow(null)
     setCustomWorkflow({ name: '', description: '', steps: [] })
+  }
+
+  const handleEditTemplate = (template: WorkflowTemplate) => {
+    // Convert template to custom workflow format for editing
+    setCustomWorkflow({
+      name: template.name,
+      description: template.description,
+      steps: template.steps.map(step => ({
+        name: step.name,
+        description: step.description,
+        type: step.type,
+        delayHours: step.config.delayBeforeExecution || 0,
+        requiresApproval: step.config.requiresApproval,
+        approvers: step.config.approvers || [],
+        numberOfApprovalsNeeded: 1,
+        autoStart: step.config.autoProceed || false
+      }))
+    })
+    setEditingTemplate(template)
+    setShowCustomBuilder(true)
+  }
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    if (!confirm('Are you sure you want to delete this workflow template? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      await workflowApiService.deleteWorkflowTemplate(templateId)
+      // Refresh templates list
+      await loadData()
+      alert('Workflow template deleted successfully!')
+    } catch (error) {
+      console.error('Failed to delete template:', error)
+      alert('Failed to delete workflow template. Please try again.')
+    }
   }
 
   const getStepIcon = (stepType: string) => {
@@ -440,6 +489,29 @@ const WorkflowBuilderPage = () => {
                   </div>
                 </div>
                 
+                {/* Template Actions */}
+                <div className="flex gap-2 pt-4 border-t border-border">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleEditTemplate(template)}
+                    className="flex-1 border-primary text-primary hover:bg-primary/10"
+                  >
+                    <span className="mr-1">✏️</span>
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDeleteTemplate(template.id)}
+                    className="flex-1 border-destructive text-destructive hover:bg-destructive/10"
+                  >
+                    <span className="mr-1">🗑️</span>
+                    Delete
+                  </Button>
+                </div>
 
               </CardContent>
             </Card>
@@ -457,9 +529,9 @@ const WorkflowBuilderPage = () => {
           <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <Card>
               <CardHeader>
-                <CardTitle>Create Workflow</CardTitle>
+                <CardTitle>{editingTemplate ? 'Edit Workflow Template' : 'Create Workflow'}</CardTitle>
                 <CardDescription>
-                  Build custom workflow after you receive your email
+                  {editingTemplate ? 'Modify your existing workflow template' : 'Build custom workflow after you receive your email'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -711,13 +783,17 @@ const WorkflowBuilderPage = () => {
                       disabled={!customWorkflow.name || customWorkflow.steps.length === 0}
                       className="flex-1 border-green-500 text-green-600 hover:bg-green-50"
                     >
-                      💾 Save as Template
+                      💾 {editingTemplate ? 'Update Template' : 'Save as Template'}
                     </Button>
                     
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setShowCustomBuilder(false)}
+                      onClick={() => {
+                        setShowCustomBuilder(false)
+                        setEditingTemplate(null)
+                        setCustomWorkflow({ name: '', description: '', steps: [] })
+                      }}
                       className="flex-1"
                     >
                       Cancel

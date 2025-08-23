@@ -20,6 +20,31 @@ export interface WorkflowTemplate {
   updated_at: string;
 }
 
+export interface WorkflowStepDetailPopulated {
+  id: string;
+  workflow_step_id: string;
+  delay_in_seconds?: number;
+  auto_start: boolean;
+  required_human_approval: boolean;
+  number_of_approvals_needed?: number;
+  status: 'awaiting' | 'finished' | 'rejected';
+  order_number: number;
+  created_at: string;
+  updated_at: string;
+  workflow_step: WorkflowStep;
+}
+
+export interface WorkflowTemplatePopulated {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  steps_execution_id: string[];
+  created_at: string;
+  updated_at: string;
+  step_details: WorkflowStepDetailPopulated[];
+}
+
 export interface WorkflowStepDetail {
   id: string;
   workflow_step_id: string;
@@ -55,7 +80,7 @@ class WorkflowApiService {
    */
   async getWorkflowSteps(): Promise<WorkflowStep[]> {
     const response = await apiClient.get('/api/workflows/steps');
-    return response.data;
+    return response.data as WorkflowStep[];
   }
 
   /**
@@ -63,15 +88,15 @@ class WorkflowApiService {
    */
   async getWorkflowStep(stepId: string): Promise<WorkflowStep> {
     const response = await apiClient.get(`/api/workflows/steps/${stepId}`);
-    return response.data;
+    return response.data as WorkflowStep;
   }
 
   /**
    * Get all workflow templates with populated step details
    */
-  async getWorkflowTemplates(): Promise<WorkflowTemplate[]> {
+  async getWorkflowTemplates(): Promise<WorkflowTemplatePopulated[]> {
     const response = await apiClient.get('/api/workflows/templates');
-    return response.data;
+    return response.data as WorkflowTemplatePopulated[];
   }
 
   /**

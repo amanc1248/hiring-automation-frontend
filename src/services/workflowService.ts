@@ -10,7 +10,7 @@ import type {
   WorkflowTemplate,
   WorkflowStats
 } from '../types/workflow'
-import { workflowApiService } from './workflowApiService'
+import { workflowApiService, type WorkflowTemplatePopulated } from './workflowApiService'
 
 // Mock workflow templates removed - now using real API from workflowApiService
 
@@ -378,15 +378,34 @@ export const workflowService = {
   // Workflow Templates
   async getWorkflowTemplates(): Promise<WorkflowTemplate[]> {
     try {
-      const apiTemplates = await workflowApiService.getWorkflowTemplates()
+      const apiTemplates: WorkflowTemplatePopulated[] = await workflowApiService.getWorkflowTemplates()
       // Convert API templates to frontend format
       return apiTemplates.map(template => ({
         id: template.id,
         name: template.name,
         description: template.description || '',
-        category: template.category,
+        category: template.category as 'engineering' | 'design' | 'marketing' | 'sales' | 'general',
         isDefault: false,
-        steps: [], // Steps will be loaded separately when needed
+        steps: template.step_details.map(stepDetail => ({
+          name: stepDetail.workflow_step.name,
+          description: stepDetail.workflow_step.description,
+          type: stepDetail.workflow_step.step_type,
+          order: stepDetail.order_number,
+          isActive: true,
+          status: 'pending' as const,
+          config: {
+            delayBeforeExecution: Math.floor((stepDetail.delay_in_seconds || 0) / 3600), // Convert seconds to hours
+            requiresApproval: stepDetail.required_human_approval,
+            approvers: [], // We don't have approver names in the API response
+            autoProceed: stepDetail.auto_start
+          },
+          aiEmail: {
+            enabled: false,
+            subjectTemplate: '',
+            bodyTemplate: '',
+            variables: []
+          }
+        })),
         createdAt: template.created_at,
         updatedAt: template.updated_at
       }))
