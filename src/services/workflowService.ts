@@ -389,7 +389,7 @@ export const workflowService = {
         steps: template.step_details.map(stepDetail => ({
           name: stepDetail.workflow_step.name,
           description: stepDetail.workflow_step.description,
-          type: stepDetail.workflow_step.step_type,
+          type: stepDetail.workflow_step.id,
           order: stepDetail.order_number,
           isActive: true,
           status: 'pending' as const,
