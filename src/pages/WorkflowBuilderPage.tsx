@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import { workflowService } from '../services/workflowService'
 import { workflowApiService, type WorkflowStep as ApiWorkflowStep } from '../services/workflowApiService'
 import { jobService } from '../services/jobService'
-import { userService } from '../services/userService'
+import { userApiService } from '../services/userApiService'
 import type { Workflow, WorkflowStep, WorkflowTemplate, WorkflowStats } from '../types/workflow'
 import type { JobPosting } from '../types/job'
 import type { User } from '../types/user'
@@ -92,13 +92,14 @@ const WorkflowBuilderPage = () => {
         jobService.getJobs(company.id),
         workflowService.getWorkflowTemplates(),
         workflowService.getWorkflowStats(company.id),
-        userService.getUsers(company.id, { page: 1, limit: 100, status: 'active' }),
+        userApiService.getUsers({ limit: 100, status_filter: 'active' }),
         workflowApiService.getWorkflowSteps()
       ])
       setWorkflows(workflowsData)
       setJobs(jobsData)
       setTemplates(templatesData)
       setStats(statsData)
+      console.log('Users data received:', usersData)
       setUsers(usersData.users)
       setAvailableSteps(availableStepsData)
     } catch (error) {
@@ -854,11 +855,15 @@ const WorkflowBuilderPage = () => {
                           }}
                           className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth min-h-[100px]"
                         >
-                          {users.map(user => (
-                            <option key={user.id} value={user.id}>
-                              {user.firstName} {user.lastName} ({user.role.displayName})
-                            </option>
-                          ))}
+                          {users.length === 0 ? (
+                            <option disabled>No users available</option>
+                          ) : (
+                            users.map(user => (
+                              <option key={user.id} value={user.id}>
+                                {user.firstName} {user.lastName} ({user.role.displayName})
+                              </option>
+                            ))
+                          )}
                         </select>
                         <p className="text-xs text-muted-foreground">Hold Ctrl/Cmd to select multiple users</p>
                       </div>
@@ -1127,11 +1132,15 @@ const WorkflowBuilderPage = () => {
                           }}
                           className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth min-h-[100px]"
                         >
-                          {users.map(user => (
-                            <option key={user.id} value={user.id}>
-                              {user.firstName} {user.lastName} ({user.role.displayName})
-                            </option>
-                          ))}
+                          {users.length === 0 ? (
+                            <option disabled>No users available</option>
+                          ) : (
+                            users.map(user => (
+                              <option key={user.id} value={user.id}>
+                                {user.firstName} {user.lastName} ({user.role.displayName})
+                              </option>
+                            ))
+                          )}
                         </select>
                         <p className="text-xs text-muted-foreground">Hold Ctrl/Cmd to select multiple users</p>
                       </div>
