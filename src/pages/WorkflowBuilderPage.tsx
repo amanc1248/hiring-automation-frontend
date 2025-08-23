@@ -61,7 +61,6 @@ const WorkflowBuilderPage = () => {
       approvers: string[]
       numberOfApprovalsNeeded: number
       autoStart: boolean
-      aiEmailEnabled: boolean
     }>
   })
 
@@ -73,8 +72,7 @@ const WorkflowBuilderPage = () => {
     requiresApproval: false,
     approvers: [] as string[],
     numberOfApprovalsNeeded: 1,
-    autoStart: false,
-    aiEmailEnabled: false
+    autoStart: false
   })
 
   useEffect(() => {
@@ -150,6 +148,35 @@ const WorkflowBuilderPage = () => {
     }
   }
 
+  const handleSaveAsTemplate = async () => {
+    if (!customWorkflow.name || customWorkflow.steps.length === 0) {
+      alert('Please provide a workflow name and at least one step before saving as template.')
+      return
+    }
+
+    try {
+      // For now, we'll create a template with empty steps_execution_id
+      // In a full implementation, you'd want to create WorkflowStepDetail records first
+      const templateData = {
+        name: customWorkflow.name,
+        description: customWorkflow.description || `Custom workflow template: ${customWorkflow.name}`,
+        category: 'custom', // You could add a category selector
+        steps_execution_id: [] // This would be populated with actual step detail IDs
+      }
+
+      await workflowApiService.createWorkflowTemplate(templateData)
+      alert('Workflow template saved successfully!')
+      
+      // Refresh templates list
+      const updatedTemplates = await workflowService.getWorkflowTemplates()
+      setTemplates(updatedTemplates)
+      
+    } catch (error) {
+      console.error('Failed to save workflow template:', error)
+      alert('Failed to save workflow template. Please try again.')
+    }
+  }
+
   const handleCreateCustomWorkflow = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!company || customWorkflow.steps.length === 0) {
@@ -172,10 +199,10 @@ const WorkflowBuilderPage = () => {
           autoProceed: !step.requiresApproval
         },
         aiEmail: {
-          enabled: step.aiEmailEnabled,
-          subjectTemplate: step.aiEmailEnabled ? `Update for {job_title}` : '',
-          bodyTemplate: step.aiEmailEnabled ? `Hi {candidate_name}, this is an update regarding your application.` : '',
-          variables: step.aiEmailEnabled ? ['candidate_name', 'job_title', 'company_name'] : []
+          enabled: false,
+          subjectTemplate: '',
+          bodyTemplate: '',
+          variables: []
         }
       }))
 
@@ -215,8 +242,7 @@ const WorkflowBuilderPage = () => {
       requiresApproval: false,
       approvers: [],
       numberOfApprovalsNeeded: 1,
-      autoStart: false,
-      aiEmailEnabled: false
+      autoStart: false
     })
   }
 
@@ -237,8 +263,7 @@ const WorkflowBuilderPage = () => {
       requiresApproval: step.requiresApproval,
       approvers: step.approvers,
       numberOfApprovalsNeeded: step.numberOfApprovalsNeeded || 1,
-      autoStart: step.autoStart || false,
-      aiEmailEnabled: step.aiEmailEnabled
+      autoStart: step.autoStart || false
     })
     setEditingStepIndex(index)
     setShowEditStep(true)
@@ -268,8 +293,7 @@ const WorkflowBuilderPage = () => {
       requiresApproval: false,
       approvers: [],
       numberOfApprovalsNeeded: 1,
-      autoStart: false,
-      aiEmailEnabled: false
+      autoStart: false
     })
     setEditingStepIndex(null)
     setShowEditStep(false)
@@ -284,8 +308,7 @@ const WorkflowBuilderPage = () => {
       requiresApproval: false,
       approvers: [],
       numberOfApprovalsNeeded: 1,
-      autoStart: false,
-      aiEmailEnabled: false
+      autoStart: false
     })
     setEditingStepIndex(null)
     setShowEditStep(false)
@@ -304,8 +327,7 @@ const WorkflowBuilderPage = () => {
         requiresApproval: step.config.requiresApproval,
         approvers: step.config.approvers || [],
         numberOfApprovalsNeeded: 1,
-        autoStart: false,
-        aiEmailEnabled: step.aiEmail.enabled
+        autoStart: false
       }))
     })
     setShowEditWorkflow(true)
@@ -333,10 +355,10 @@ const WorkflowBuilderPage = () => {
           autoProceed: !step.requiresApproval
         },
         aiEmail: {
-          enabled: step.aiEmailEnabled,
-          subjectTemplate: step.aiEmailEnabled ? `Update for {job_title}` : '',
-          bodyTemplate: step.aiEmailEnabled ? `Hi {candidate_name}, this is an update regarding your application.` : '',
-          variables: step.aiEmailEnabled ? ['candidate_name', 'job_title', 'company_name'] : []
+          enabled: false,
+          subjectTemplate: '',
+          bodyTemplate: '',
+          variables: []
         }
       }))
 
@@ -855,14 +877,16 @@ const WorkflowBuilderPage = () => {
                           }}
                           className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth min-h-[100px]"
                         >
-                          {users.length === 0 ? (
-                            <option disabled>No users available</option>
+                          {users.filter(user => user.role.name !== 'admin').length === 0 ? (
+                            <option disabled>No non-admin users available</option>
                           ) : (
-                            users.map(user => (
-                              <option key={user.id} value={user.id}>
-                                {user.firstName} {user.lastName} ({user.role.displayName})
-                              </option>
-                            ))
+                            users
+                              .filter(user => user.role.name !== 'admin')
+                              .map(user => (
+                                <option key={user.id} value={user.id}>
+                                  {user.firstName} {user.lastName} ({user.role.displayName})
+                                </option>
+                              ))
                           )}
                         </select>
                         <p className="text-xs text-muted-foreground">Hold Ctrl/Cmd to select multiple users</p>
@@ -889,15 +913,7 @@ const WorkflowBuilderPage = () => {
                           <span className="text-sm text-foreground">Auto Start</span>
                         </div>
                         
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newStep.aiEmailEnabled}
-                            onChange={(e) => setNewStep(prev => ({ ...prev, aiEmailEnabled: e.target.checked }))}
-                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
-                          />
-                          <span className="text-sm text-foreground">AI Email Enabled</span>
-                        </div>
+
                       </div>
                     </div>
 
@@ -970,11 +986,7 @@ const WorkflowBuilderPage = () => {
                                     👤 Approval
                                   </span>
                                 )}
-                                {step.aiEmailEnabled && (
-                                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
-                                    📧 AI Email
-                                  </span>
-                                )}
+
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -1012,6 +1024,16 @@ const WorkflowBuilderPage = () => {
                       className="flex-1 bg-gradient-hero hover:bg-gradient-hero/90"
                     >
                       Create Custom Workflow
+                    </Button>
+                    
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSaveAsTemplate}
+                      disabled={!customWorkflow.name || customWorkflow.steps.length === 0}
+                      className="flex-1 border-green-500 text-green-600 hover:bg-green-50"
+                    >
+                      💾 Save as Template
                     </Button>
                     
                     <Button
@@ -1132,14 +1154,16 @@ const WorkflowBuilderPage = () => {
                           }}
                           className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth min-h-[100px]"
                         >
-                          {users.length === 0 ? (
-                            <option disabled>No users available</option>
+                          {users.filter(user => user.role.name !== 'admin').length === 0 ? (
+                            <option disabled>No non-admin users available</option>
                           ) : (
-                            users.map(user => (
-                              <option key={user.id} value={user.id}>
-                                {user.firstName} {user.lastName} ({user.role.displayName})
-                              </option>
-                            ))
+                            users
+                              .filter(user => user.role.name !== 'admin')
+                              .map(user => (
+                                <option key={user.id} value={user.id}>
+                                  {user.firstName} {user.lastName} ({user.role.displayName})
+                                </option>
+                              ))
                           )}
                         </select>
                         <p className="text-xs text-muted-foreground">Hold Ctrl/Cmd to select multiple users</p>
@@ -1166,15 +1190,7 @@ const WorkflowBuilderPage = () => {
                           <span className="text-sm text-foreground">Auto Start</span>
                         </div>
                         
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newStep.aiEmailEnabled}
-                            onChange={(e) => setNewStep(prev => ({ ...prev, aiEmailEnabled: e.target.checked }))}
-                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
-                          />
-                          <span className="text-sm text-foreground">AI Email Enabled</span>
-                        </div>
+
                       </div>
                     </div>
 
@@ -1247,11 +1263,7 @@ const WorkflowBuilderPage = () => {
                                     👤 Approval
                                   </span>
                                   )}
-                                {step.aiEmailEnabled && (
-                                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
-                                    📧 AI Email
-                                  </span>
-                                )}
+
                               </div>
                             </div>
                             <div className="flex gap-2">
