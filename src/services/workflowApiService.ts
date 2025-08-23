@@ -83,6 +83,26 @@ class WorkflowApiService {
   }
 
   /**
+   * Create a new workflow template with step details
+   */
+  async createWorkflowTemplateWithSteps(templateData: {
+    name: string;
+    description?: string;
+    category: string;
+    steps: Array<{
+      workflow_step_id: string;
+      delay_in_seconds?: number;
+      auto_start: boolean;
+      required_human_approval: boolean;
+      number_of_approvals_needed?: number;
+      order_number: number;
+    }>;
+  }): Promise<WorkflowTemplate> {
+    const response = await apiClient.post('/api/workflows/templates/with-steps', templateData);
+    return response.data;
+  }
+
+  /**
    * Update an existing workflow template
    */
   async updateWorkflowTemplate(id: string, template: Partial<Omit<WorkflowTemplate, 'id' | 'created_at' | 'updated_at'>>): Promise<WorkflowTemplate> {

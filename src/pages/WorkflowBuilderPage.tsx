@@ -155,16 +155,36 @@ const WorkflowBuilderPage = () => {
     }
 
     try {
-      // For now, we'll create a template with empty steps_execution_id
-      // In a full implementation, you'd want to create WorkflowStepDetail records first
+      // Map frontend workflow steps to backend format
+      const steps = customWorkflow.steps.map((step, index) => {
+        // Find the actual workflow step ID from availableSteps
+        let workflowStepId = step.type
+        
+        // If it's a custom step or not found in availableSteps, we need to handle it
+        if (step.type === 'custom' || !availableSteps.find(s => s.id === step.type)) {
+          // For custom steps, we could create a new workflow_step or use a default one
+          // For now, let's skip custom steps or throw an error
+          throw new Error(`Cannot save template with custom steps. Please use only predefined workflow steps.`)
+        }
+        
+        return {
+          workflow_step_id: workflowStepId,
+          delay_in_seconds: step.delayHours * 3600, // Convert hours to seconds
+          auto_start: step.autoStart,
+          required_human_approval: step.requiresApproval,
+          number_of_approvals_needed: step.requiresApproval ? step.numberOfApprovalsNeeded : undefined,
+          order_number: index + 1
+        }
+      })
+
       const templateData = {
         name: customWorkflow.name,
         description: customWorkflow.description || `Custom workflow template: ${customWorkflow.name}`,
-        category: 'custom', // You could add a category selector
-        steps_execution_id: [] // This would be populated with actual step detail IDs
+        category: 'custom',
+        steps: steps
       }
 
-      await workflowApiService.createWorkflowTemplate(templateData)
+      await workflowApiService.createWorkflowTemplateWithSteps(templateData)
       alert('Workflow template saved successfully!')
       
       // Refresh templates list
@@ -456,7 +476,7 @@ const WorkflowBuilderPage = () => {
             onClick={() => setShowCustomBuilder(true)}
           >
             <span className="mr-2">⚡</span>
-            Build Custom
+            Create Workflow
           </Button>
         </div>
       </div>
@@ -589,23 +609,9 @@ const WorkflowBuilderPage = () => {
         </div>
 
         {workflows.length === 0 ? (
-          <Card>
-            <CardContent className="p-8 text-center">
-              <div className="text-6xl mb-4">⚡</div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">No workflows created yet</h3>
-              <p className="text-muted-foreground mb-4">
-                Create your first hiring workflow to automate the hiring process for a specific job.
-              </p>
-              <Button 
-                size="lg" 
-                className="bg-gradient-hero hover:bg-gradient-hero/90"
-                onClick={() => setShowCreateForm(true)}
-              >
-                <span className="mr-2">⚡</span>
-                Create First Workflow
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">No workflows created yet.</p>
+          </div>
         ) : (
           <div className="space-y-4">
             {workflows.map((workflow) => {
@@ -779,7 +785,7 @@ const WorkflowBuilderPage = () => {
           <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <Card>
               <CardHeader>
-                <CardTitle>Build Custom Workflow</CardTitle>
+                <CardTitle>Create Workflow</CardTitle>
                 <CardDescription>
                   Build custom workflow after you receive your email
                 </CardDescription>
@@ -1023,7 +1029,7 @@ const WorkflowBuilderPage = () => {
                       disabled={customWorkflow.steps.length === 0}
                       className="flex-1 bg-gradient-hero hover:bg-gradient-hero/90"
                     >
-                      Create Custom Workflow
+                      Create Workflow
                     </Button>
                     
                     <Button
