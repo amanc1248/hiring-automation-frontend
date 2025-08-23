@@ -1,9 +1,13 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from '../ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card'
 import { useAuth } from '../../hooks/useAuth'
 import { jobService } from '../../services/jobService'
+import { emailService } from '../../services/emailService'
+import { workflowService } from '../../services/workflowService'
 import type { JobCreateData, JobRequirement, JobLocation, JobSalary } from '../../types/job'
+import type { EmailAccount } from '../../types/email'
+import type { WorkflowTemplate } from '../../types/workflow'
 
 interface JobFormProps {
   onSuccess?: () => void
@@ -13,6 +17,9 @@ interface JobFormProps {
 const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
   const { company } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
+  const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([])
+  const [workflowTemplates, setWorkflowTemplates] = useState<WorkflowTemplate[]>([])
+  const [isLoadingData, setIsLoadingData] = useState(true)
   const [formData, setFormData] = useState<JobCreateData>({
     title: '',
     department: '',
@@ -47,6 +54,30 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
   })
 
   const [newBenefit, setNewBenefit] = useState('')
+
+  // Load email accounts and workflow templates
+  useEffect(() => {
+    const loadData = async () => {
+      if (!company) return
+      
+      setIsLoadingData(true)
+      try {
+        const [emailAccountsData, workflowTemplatesData] = await Promise.all([
+          emailService.getEmailAccounts(company.id),
+          workflowService.getWorkflowTemplates()
+        ])
+        
+        setEmailAccounts(emailAccountsData)
+        setWorkflowTemplates(workflowTemplatesData)
+      } catch (error) {
+        console.error('Failed to load data:', error)
+      } finally {
+        setIsLoadingData(false)
+      }
+    }
+
+    loadData()
+  }, [company])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -471,34 +502,55 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
             {/* Application Email */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Application Email *</label>
-              <input
-                type="email"
+              <select
                 required
                 value={formData.applicationEmail}
                 onChange={(e) => handleChange('applicationEmail', e.target.value)}
-                className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                placeholder="jobs@company.com"
-              />
+                className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                disabled={isLoadingData}
+              >
+                <option value="">
+                  {isLoadingData ? 'Loading email accounts...' : 'Select an email account'}
+                </option>
+                {emailAccounts.map((account) => (
+                  <option key={account.id} value={account.email}>
+                    {account.email} ({account.provider})
+                  </option>
+                ))}
+              </select>
               <p className="text-xs text-muted-foreground">
-                This email will receive all job applications for this position
+                {emailAccounts.length === 0 && !isLoadingData ? (
+                  <>No email accounts configured. <a href="/email-config" className="text-primary hover:underline">Configure email accounts</a> first.</>
+                ) : (
+                  'This email will receive all job applications for this position'
+                )}
               </p>
             </div>
 
             {/* Workflow Selection */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Hiring Workflow</label>
+              <label className="text-sm font-medium text-foreground">Select Workflow Template</label>
               <select
                 value={formData.workflowId}
                 onChange={(e) => handleChange('workflowId', e.target.value)}
                 className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                disabled={isLoadingData}
               >
-                <option value="">Select a workflow (optional)</option>
-                <option value="engineering-template">Engineering Template</option>
-                <option value="design-template">Design Template</option>
-                <option value="custom-workflow">Custom Workflow</option>
+                <option value="">
+                  {isLoadingData ? 'Loading workflow templates...' : 'Select a workflow template (optional)'}
+                </option>
+                {workflowTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} - {template.category}
+                  </option>
+                ))}
               </select>
               <p className="text-xs text-muted-foreground">
-                Choose a workflow to automate the hiring process for this job. You can create custom workflows in the Workflows section.
+                {workflowTemplates.length === 0 && !isLoadingData ? (
+                  <>No workflow templates available. <a href="/workflows" className="text-primary hover:underline">Create workflow templates</a> first.</>
+                ) : (
+                  'Choose a workflow template to automate the hiring process for this job. You can create custom workflows in the Workflows section.'
+                )}
               </p>
             </div>
 
