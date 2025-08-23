@@ -303,6 +303,14 @@ const WorkflowBuilderPage = () => {
   }
 
   const getStepIcon = (stepType: string) => {
+    // If stepType is a UUID, try to find the step in availableSteps
+    if (stepType.length > 20) { // Likely a UUID
+      const step = availableSteps.find(s => s.id === stepType)
+      if (step) {
+        stepType = step.step_type
+      }
+    }
+    
     switch (stepType) {
       case 'resume_analysis':
       case 'automated': return '📄'
@@ -320,6 +328,14 @@ const WorkflowBuilderPage = () => {
   }
 
   const getStepColor = (stepType: string) => {
+    // If stepType is a UUID, try to find the step in availableSteps
+    if (stepType.length > 20) { // Likely a UUID
+      const step = availableSteps.find(s => s.id === stepType)
+      if (step) {
+        stepType = step.step_type
+      }
+    }
+    
     switch (stepType) {
       case 'resume_analysis': return 'bg-green-100 text-green-800'
       case 'human_approval': return 'bg-yellow-100 text-yellow-800'
@@ -720,7 +736,7 @@ const WorkflowBuilderPage = () => {
                               <span className="text-sm font-medium text-muted-foreground">#{index + 1}</span>
                               <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStepColor(step.type)}`}>
                                 <span>{getStepIcon(step.type)}</span>
-                                <span>{step.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                                <span>{step.name}</span>
                               </span>
                               <div className="text-sm text-muted-foreground">
                                 {step.description}
