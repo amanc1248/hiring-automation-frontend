@@ -1,0 +1,1233 @@
+import React, { useState, useEffect } from 'react'
+import { Button } from '../components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { useAuth } from '../hooks/useAuth'
+import { workflowService } from '../services/workflowService'
+import { jobService } from '../services/jobService'
+import { userService } from '../services/userService'
+import type { Workflow, WorkflowStep, WorkflowTemplate, WorkflowStats } from '../types/workflow'
+import type { JobPosting } from '../types/job'
+import type { User } from '../types/user'
+
+const WorkflowBuilderPage = () => {
+  const { company } = useAuth()
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const [jobs, setJobs] = useState<JobPosting[]>([])
+  const [templates, setTemplates] = useState<WorkflowTemplate[]>([])
+  const [stats, setStats] = useState<WorkflowStats | null>(null)
+  const [users, setUsers] = useState<User[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [showCustomBuilder, setShowCustomBuilder] = useState(false)
+  const [showEditWorkflow, setShowEditWorkflow] = useState(false)
+  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null)
+  const [showEditStep, setShowEditStep] = useState(false)
+  const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null)
+  const [selectedJob, setSelectedJob] = useState<string>('')
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+
+  // Form states
+  const [workflowForm, setWorkflowForm] = useState({
+    name: '',
+    description: '',
+    jobId: '',
+    templateId: ''
+  })
+
+  // Step type descriptions (hardcoded)
+  const stepTypeDescriptions = {
+    resume_analysis: 'AI analyzes resume against job requirements',
+    human_approval: 'Human reviewer approves or rejects candidate',
+    task_assignment: 'Send technical assessment to candidate',
+    task_review: 'Review completed technical assessment',
+    interview_scheduling: 'Schedule interview automatically',
+    ai_interview: 'Conduct AI-powered technical interview',
+    offer_letter: 'Send offer letter to approved candidate',
+    custom: 'Custom workflow step'
+  }
+
+  // Custom workflow builder state
+  const [customWorkflow, setCustomWorkflow] = useState({
+    name: '',
+    description: '',
+    steps: [] as Array<{
+      name: string
+      description: string
+      type: 'resume_analysis' | 'human_approval' | 'task_assignment' | 'task_review' | 'interview_scheduling' | 'ai_interview' | 'offer_letter' | 'custom'
+      delayHours: number
+      requiresApproval: boolean
+      approvers: string[]
+      aiEmailEnabled: boolean
+    }>
+  })
+
+  const [newStep, setNewStep] = useState({
+    name: '',
+    description: '',
+    type: 'resume_analysis' as 'resume_analysis' | 'human_approval' | 'task_assignment' | 'task_review' | 'interview_scheduling' | 'ai_interview' | 'offer_letter' | 'custom',
+    delayHours: 0,
+    requiresApproval: false,
+    approvers: [] as string[],
+    aiEmailEnabled: false
+  })
+
+  useEffect(() => {
+    if (company) {
+      loadData()
+    }
+  }, [company])
+
+  const loadData = async () => {
+    if (!company) return
+    setIsLoading(true)
+    try {
+      const [workflowsData, jobsData, templatesData, statsData, usersData] = await Promise.all([
+        workflowService.getWorkflows(company.id),
+        jobService.getJobs(company.id),
+        workflowService.getWorkflowTemplates(),
+        workflowService.getWorkflowStats(company.id),
+        userService.getUsers(company.id, { page: 1, limit: 100, status: 'active' })
+      ])
+      setWorkflows(workflowsData)
+      setJobs(jobsData)
+      setTemplates(templatesData)
+      setStats(statsData)
+      setUsers(usersData.users)
+    } catch (error) {
+      console.error('Failed to load workflow data:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreateWorkflow = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!company || !workflowForm.jobId || !workflowForm.templateId) return
+
+    try {
+      const template = templates.find(t => t.id === workflowForm.templateId)
+      if (!template) {
+        alert('Selected template not found')
+        return
+      }
+
+      const newWorkflow = await workflowService.createWorkflow({
+        name: workflowForm.name,
+        description: workflowForm.description,
+        jobId: workflowForm.jobId,
+        steps: template.steps
+      }, company.id)
+
+      setWorkflows(prev => [...prev, newWorkflow])
+      setShowCreateForm(false)
+      setWorkflowForm({ name: '', description: '', jobId: '', templateId: '' })
+      alert('Workflow created successfully!')
+    } catch (error) {
+      console.error('Failed to create workflow:', error)
+      alert('Failed to create workflow. Please try again.')
+    }
+  }
+
+  const handleDeleteWorkflow = async (workflowId: string) => {
+    if (confirm('Are you sure you want to delete this workflow?')) {
+      try {
+        await workflowService.deleteWorkflow(workflowId)
+        setWorkflows(prev => prev.filter(w => w.id !== workflowId))
+        alert('Workflow deleted successfully!')
+      } catch (error) {
+        console.error('Failed to delete workflow:', error)
+        alert('Failed to delete workflow. Please try again.')
+      }
+    }
+  }
+
+  const handleCreateCustomWorkflow = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!company || customWorkflow.steps.length === 0) {
+      alert('Please fill in all required fields and add at least one step.')
+      return
+    }
+
+    try {
+      const workflowSteps = customWorkflow.steps.map((step, index) => ({
+        name: step.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()), // Generate name from type
+        description: step.description,
+        type: step.type,
+        order: index + 1,
+        isActive: true,
+        status: 'pending' as const,
+        config: {
+          delayBeforeExecution: step.delayHours,
+          requiresApproval: step.requiresApproval,
+          approvers: step.approvers || [],
+          autoProceed: !step.requiresApproval
+        },
+        aiEmail: {
+          enabled: step.aiEmailEnabled,
+          subjectTemplate: step.aiEmailEnabled ? `Update for {job_title}` : '',
+          bodyTemplate: step.aiEmailEnabled ? `Hi {candidate_name}, this is an update regarding your application.` : '',
+          variables: step.aiEmailEnabled ? ['candidate_name', 'job_title', 'company_name'] : []
+        }
+      }))
+
+      const newWorkflow = await workflowService.createWorkflow({
+        name: customWorkflow.name,
+        description: customWorkflow.description,
+        jobId: '', // Workflows are now generic templates
+        steps: workflowSteps
+      }, company.id)
+
+      setWorkflows(prev => [...prev, newWorkflow])
+      setShowCustomBuilder(false)
+      setCustomWorkflow({ name: '', description: '', steps: [] })
+      alert('Custom workflow created successfully!')
+    } catch (error) {
+      console.error('Failed to create custom workflow:', error)
+      alert('Failed to create custom workflow. Please try again.')
+    }
+  }
+
+  const handleAddStep = () => {
+    if (!newStep.description.trim()) {
+      alert('Please enter a step description.')
+      return
+    }
+
+    setCustomWorkflow(prev => ({
+      ...prev,
+      steps: [...prev.steps, { ...newStep }]
+    }))
+
+    setNewStep({
+      name: '',
+      description: '',
+      type: 'resume_analysis',
+      delayHours: 0,
+      requiresApproval: false,
+      approvers: [],
+      aiEmailEnabled: false
+    })
+  }
+
+  const handleRemoveStep = (index: number) => {
+    setCustomWorkflow(prev => ({
+      ...prev,
+      steps: prev.steps.filter((_, i) => i !== index)
+    }))
+  }
+
+  const handleEditStep = (index: number) => {
+    const step = customWorkflow.steps[index]
+    setNewStep({
+      name: step.name,
+      description: step.description,
+      type: step.type,
+      delayHours: step.delayHours,
+      requiresApproval: step.requiresApproval,
+      approvers: step.approvers,
+      aiEmailEnabled: step.aiEmailEnabled
+    })
+    setEditingStepIndex(index)
+    setShowEditStep(true)
+  }
+
+  const handleUpdateStep = () => {
+    if (editingStepIndex === null) return
+    
+    if (!newStep.description.trim()) {
+      alert('Please enter a step description.')
+      return
+    }
+
+    setCustomWorkflow(prev => ({
+      ...prev,
+      steps: prev.steps.map((step, index) => 
+        index === editingStepIndex ? { ...newStep } : step
+      )
+    }))
+
+    // Reset form
+    setNewStep({
+      name: '',
+      description: '',
+      type: 'resume_analysis',
+      delayHours: 0,
+      requiresApproval: false,
+      approvers: [],
+      aiEmailEnabled: false
+    })
+    setEditingStepIndex(null)
+    setShowEditStep(false)
+  }
+
+  const handleCancelEdit = () => {
+    setNewStep({
+      name: '',
+      description: '',
+      type: 'resume_analysis',
+      delayHours: 0,
+      requiresApproval: false,
+      approvers: [],
+      aiEmailEnabled: false
+    })
+    setEditingStepIndex(null)
+    setShowEditStep(false)
+  }
+
+  const handleEditWorkflow = (workflow: Workflow) => {
+    setEditingWorkflow(workflow)
+    setCustomWorkflow({
+      name: workflow.name,
+      description: workflow.description,
+      steps: workflow.steps.map(step => ({
+        name: step.name,
+        description: step.description,
+        type: step.type,
+        delayHours: step.config.delayBeforeExecution || 0,
+        requiresApproval: step.config.requiresApproval,
+        approvers: step.config.approvers || [],
+        aiEmailEnabled: step.aiEmail.enabled
+      }))
+    })
+    setShowEditWorkflow(true)
+  }
+
+  const handleUpdateWorkflow = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!company || !editingWorkflow || customWorkflow.steps.length === 0) {
+      alert('Please fill in all required fields and add at least one step.')
+      return
+    }
+
+    try {
+      const workflowSteps = customWorkflow.steps.map((step, index) => ({
+        name: step.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        description: step.description,
+        type: step.type,
+        order: index + 1,
+        isActive: true,
+        status: 'pending' as const,
+        config: {
+          delayBeforeExecution: step.delayHours,
+          requiresApproval: step.requiresApproval,
+          approvers: step.approvers || [],
+          autoProceed: !step.requiresApproval
+        },
+        aiEmail: {
+          enabled: step.aiEmailEnabled,
+          subjectTemplate: step.aiEmailEnabled ? `Update for {job_title}` : '',
+          bodyTemplate: step.aiEmailEnabled ? `Hi {candidate_name}, this is an update regarding your application.` : '',
+          variables: step.aiEmailEnabled ? ['candidate_name', 'job_title', 'company_name'] : []
+        }
+      }))
+
+      const updatedWorkflow = await workflowService.updateWorkflow(editingWorkflow.id, {
+        name: customWorkflow.name,
+        description: customWorkflow.description,
+        jobId: editingWorkflow.jobId,
+        steps: workflowSteps
+      })
+
+      if (updatedWorkflow) {
+        setWorkflows(prev => prev.map(w => w.id === editingWorkflow.id ? updatedWorkflow : w))
+        setShowEditWorkflow(false)
+        setEditingWorkflow(null)
+        setCustomWorkflow({ name: '', description: '', steps: [] })
+        alert('Workflow updated successfully!')
+      }
+    } catch (error) {
+      console.error('Failed to update workflow:', error)
+      alert('Failed to update workflow. Please try again.')
+    }
+  }
+
+  const handleCancelEditWorkflow = () => {
+    setShowEditWorkflow(false)
+    setEditingWorkflow(null)
+    setCustomWorkflow({ name: '', description: '', steps: [] })
+  }
+
+  const getStepIcon = (stepType: string) => {
+    switch (stepType) {
+      case 'resume_analysis': return '📄'
+      case 'human_approval': return '👤'
+      case 'task_assignment': return '📝'
+      case 'task_review': return '🔍'
+      case 'interview_scheduling': return '📅'
+      case 'ai_interview': return '🤖'
+      case 'offer_letter': return '📜'
+      default: return '⚙️'
+    }
+  }
+
+  const getStepColor = (stepType: string) => {
+    switch (stepType) {
+      case 'resume_analysis': return 'bg-green-100 text-green-800'
+      case 'human_approval': return 'bg-yellow-100 text-yellow-800'
+      case 'task_assignment': return 'bg-purple-100 text-purple-800'
+      case 'task_review': return 'bg-orange-100 text-orange-800'
+      case 'interview_scheduling': return 'bg-indigo-100 text-indigo-800'
+      case 'ai_interview': return 'bg-pink-100 text-pink-800'
+      case 'offer_letter': return 'bg-emerald-100 text-emerald-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getApproverNames = (approverIds: string[]) => {
+    if (!approverIds || approverIds.length === 0) return 'None'
+    return approverIds.map(id => {
+      const user = users.find(u => u.id === id)
+      return user ? `${user.firstName} ${user.lastName}` : 'Unknown User'
+    }).join(', ')
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 bg-gradient-hero rounded-lg flex items-center justify-center mx-auto animate-pulse">
+            <span className="text-white font-bold text-sm">H</span>
+          </div>
+          <p className="text-muted-foreground">Loading workflow builder...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground font-display">Workflow Builder</h1>
+          <p className="text-muted-foreground">Create and manage hiring automation workflows for each job</p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button 
+            size="lg" 
+            className="bg-gradient-hero hover:bg-gradient-hero/90 w-full sm:w-auto"
+            onClick={() => setShowCreateForm(true)}
+          >
+            <span className="mr-2">📋</span>
+            Use Template
+          </Button>
+          <Button 
+            size="lg" 
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => setShowCustomBuilder(true)}
+          >
+            <span className="mr-2">⚡</span>
+            Build Custom
+          </Button>
+        </div>
+      </div>
+
+      {/* Workflow Stats */}
+      {stats && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <span className="text-primary text-lg">⚡</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{stats.totalWorkflows}</p>
+                  <p className="text-sm text-muted-foreground">Total Workflows</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-success/10 rounded-lg flex items-center justify-center">
+                  <span className="text-success text-lg">✅</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{stats.activeWorkflows}</p>
+                  <p className="text-sm text-muted-foreground">Active</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-warning/10 rounded-lg flex items-center justify-center">
+                  <span className="text-warning text-lg">🔄</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{stats.runningExecutions}</p>
+                  <p className="text-sm text-muted-foreground">Running</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <span className="text-primary text-lg">📊</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{stats.approvalRate}%</p>
+                  <p className="text-sm text-muted-foreground">Approval Rate</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Workflow Templates */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-foreground">Workflow Templates</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {templates.map((template) => (
+            <Card key={template.id} className="card-hover">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-foreground">{template.name}</h3>
+                    <p className="text-sm text-muted-foreground capitalize">{template.category}</p>
+                  </div>
+                  {template.isDefault && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                      Default
+                    </span>
+                  )}
+                </div>
+                <CardDescription>{template.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-medium text-foreground mb-2">Workflow Steps:</h4>
+                  <div className="space-y-2">
+                    {template.steps.slice(0, 3).map((step, index) => (
+                      <div key={index} className="flex items-center space-x-2 text-sm">
+                        <span className="text-muted-foreground">{index + 1}.</span>
+                        <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStepColor(step.type)}`}>
+                          <span>{getStepIcon(step.type)}</span>
+                          <span>{step.name}</span>
+                        </span>
+                        {step.type !== 'custom' && (
+                          <div className="group relative">
+                            <span className="text-blue-500 cursor-help text-xs">ℹ️</span>
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-foreground text-background text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 max-w-xs">
+                              {stepTypeDescriptions[step.type]}
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-foreground"></div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {template.steps.length > 3 && (
+                      <p className="text-xs text-muted-foreground">
+                        +{template.steps.length - 3} more steps
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => {
+                    setSelectedTemplate(template.id)
+                    setShowCreateForm(true)
+                  }}
+                >
+                  <span className="mr-2">📋</span>
+                  Use Template
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Existing Workflows */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-foreground">Job Workflows</h2>
+        </div>
+
+        {workflows.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <div className="text-6xl mb-4">⚡</div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">No workflows created yet</h3>
+              <p className="text-muted-foreground mb-4">
+                Create your first hiring workflow to automate the hiring process for a specific job.
+              </p>
+              <Button 
+                size="lg" 
+                className="bg-gradient-hero hover:bg-gradient-hero/90"
+                onClick={() => setShowCreateForm(true)}
+              >
+                <span className="mr-2">⚡</span>
+                Create First Workflow
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {workflows.map((workflow) => {
+              const job = jobs.find(j => j.id === workflow.jobId)
+              return (
+                <Card key={workflow.id} className="card-hover">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold text-foreground">{workflow.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Job: {job?.title || 'Unknown Job'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">{workflow.description}</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          workflow.isActive ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {workflow.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditWorkflow(workflow)}
+                        >
+                          <span className="mr-1">✏️</span>
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteWorkflow(workflow.id)}
+                          className="border-destructive text-destructive hover:bg-destructive/10"
+                        >
+                          <span className="mr-1">🗑️</span>
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium text-foreground">Workflow Steps:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {workflow.steps.map((step, index) => (
+                          <div
+                            key={step.id}
+                            className="flex items-center space-x-2 px-3 py-2 bg-muted rounded-lg text-sm"
+                          >
+                            <span className="text-muted-foreground font-medium">{index + 1}</span>
+                            <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStepColor(step.type)}`}>
+                              <span>{getStepIcon(step.type)}</span>
+                              <span>{step.name}</span>
+                            </span>
+                            {step.config.requiresApproval && (
+                              <span className="text-xs text-warning">👤 Approval</span>
+                            )}
+                            {step.config.delayBeforeExecution && step.config.delayBeforeExecution > 0 && (
+                              <span className="text-xs text-blue-600">⏰ {step.config.delayBeforeExecution}h</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Create Workflow Modal */}
+      {showCreateForm && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl">
+            <Card>
+              <CardHeader>
+                <CardTitle>Create New Workflow</CardTitle>
+                <CardDescription>
+                  Set up an automated hiring workflow for a specific job
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateWorkflow} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Workflow Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={workflowForm.name}
+                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                      placeholder="e.g., Senior Developer Hiring Workflow"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Description</label>
+                    <textarea
+                      value={workflowForm.description}
+                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, description: e.target.value }))}
+                      rows={3}
+                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                      placeholder="Describe what this workflow does..."
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Select Job</label>
+                    <select
+                      required
+                      value={workflowForm.jobId}
+                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, jobId: e.target.value }))}
+                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                    >
+                      <option value="">Choose a job</option>
+                      {jobs.map((job) => (
+                        <option key={job.id} value={job.id}>
+                          {job.title} - {job.department}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Select Template</label>
+                    <select
+                      required
+                      value={workflowForm.templateId}
+                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, templateId: e.target.value }))}
+                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                    >
+                      <option value="">Choose a template</option>
+                      {templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name} ({template.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex gap-4 pt-4 border-t border-border">
+                    <Button
+                      type="submit"
+                      className="flex-1 bg-gradient-hero hover:bg-gradient-hero/90"
+                    >
+                      Create Workflow
+                    </Button>
+                    
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowCreateForm(false)}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Workflow Builder Modal */}
+      {showCustomBuilder && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <Card>
+              <CardHeader>
+                <CardTitle>Build Custom Workflow</CardTitle>
+                <CardDescription>
+                  Build custom workflow after you receive your email
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateCustomWorkflow} className="space-y-6">
+                  {/* Basic Info */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Workflow Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={customWorkflow.name}
+                      onChange={(e) => setCustomWorkflow(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                      placeholder="e.g., Engineering Hiring Workflow"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Description</label>
+                    <textarea
+                      value={customWorkflow.description}
+                      onChange={(e) => setCustomWorkflow(prev => ({ ...prev, description: e.target.value }))}
+                      rows={3}
+                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                      placeholder="Describe what this workflow does..."
+                    />
+                  </div>
+
+                  {/* Add/Edit Workflow Step */}
+                  <div className="border border-border rounded-lg p-4 space-y-4">
+                    <h3 className="text-lg font-semibold text-foreground">
+                      {editingStepIndex !== null ? 'Edit Workflow Step' : 'Add Workflow Step'}
+                    </h3>
+                    
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Step Type</label>
+                      <select
+                        value={newStep.type}
+                        onChange={(e) => setNewStep(prev => ({ ...prev, type: e.target.value as any }))}
+                        className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                      >
+
+                        <option value="resume_analysis">📄 Resume Analysis</option>
+                        <option value="human_approval">👤 Human Approval</option>
+                        <option value="task_assignment">📝 Task Assignment</option>
+                        <option value="task_review">🔍 Review Task Assignment</option>
+                        <option value="interview_scheduling">📅 Interview Scheduling</option>
+                        <option value="ai_interview">🤖 AI Interview</option>
+                        <option value="offer_letter">📜 Offer Letter</option>
+                        <option value="custom">⚙️ Custom Action</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Description</label>
+                      <input
+                        type="text"
+                        value={newStep.description}
+                        onChange={(e) => setNewStep(prev => ({ ...prev, description: e.target.value }))}
+                        className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                        placeholder="What does this step do?"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Delay (hours)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="168"
+                          value={newStep.delayHours}
+                          onChange={(e) => setNewStep(prev => ({ ...prev, delayHours: parseInt(e.target.value) || 0 }))}
+                          className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                          placeholder="0"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Approvers</label>
+                        <select
+                          multiple
+                          value={newStep.approvers}
+                          onChange={(e) => {
+                            const selectedOptions = Array.from(e.target.selectedOptions, option => option.value)
+                            setNewStep(prev => ({ ...prev, approvers: selectedOptions }))
+                          }}
+                          className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth min-h-[100px]"
+                        >
+                          {users.map(user => (
+                            <option key={user.id} value={user.id}>
+                              {user.firstName} {user.lastName} ({user.role.displayName})
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">Hold Ctrl/Cmd to select multiple users</p>
+                      </div>
+
+                      <div className="space-y-3 pt-6">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={newStep.requiresApproval}
+                            onChange={(e) => setNewStep(prev => ({ ...prev, requiresApproval: e.target.checked }))}
+                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
+                          />
+                          <span className="text-sm text-foreground">Requires Approval</span>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={newStep.aiEmailEnabled}
+                            onChange={(e) => setNewStep(prev => ({ ...prev, aiEmailEnabled: e.target.checked }))}
+                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
+                          />
+                          <span className="text-sm text-foreground">AI Email Enabled</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={editingStepIndex !== null ? handleUpdateStep : handleAddStep}
+                        className="flex-1 bg-primary hover:bg-primary/90"
+                      >
+                        <span className="mr-2">
+                          {editingStepIndex !== null ? '✏️' : '➕'}
+                        </span>
+                        {editingStepIndex !== null ? 'Update Step' : 'Add Step to Workflow'}
+                      </Button>
+                      
+                      {editingStepIndex !== null && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleCancelEdit}
+                          className="px-6"
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Current Steps */}
+                  {customWorkflow.steps.length > 0 && (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-foreground">Workflow Steps ({customWorkflow.steps.length})</h3>
+                      <div className="space-y-3">
+                        {customWorkflow.steps.map((step, index) => (
+                          <div key={index} className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                            <div className="flex items-center space-x-4">
+                              <span className="text-sm font-medium text-muted-foreground">#{index + 1}</span>
+                              <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStepColor(step.type)}`}>
+                                <span>{getStepIcon(step.type)}</span>
+                                <span>{step.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                              </span>
+                              <div className="text-sm text-muted-foreground">
+                                {step.description}
+                              </div>
+                              <div className="flex items-center space-x-2 text-xs">
+                                {step.delayHours > 0 && (
+                                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                    ⏰ {step.delayHours}h
+                                  </span>
+                                )}
+                                {step.requiresApproval && (
+                                  <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                    👤 Approval
+                                  </span>
+                                )}
+                                {step.aiEmailEnabled && (
+                                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
+                                    📧 AI Email
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditStep(index)}
+                                className="border-primary text-primary hover:bg-primary/10"
+                              >
+                                <span className="mr-1">✏️</span>
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRemoveStep(index)}
+                                className="border-destructive text-destructive hover:bg-destructive/10"
+                              >
+                                <span className="mr-1">🗑️</span>
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-4 pt-6 border-t border-border">
+                    <Button
+                      type="submit"
+                      disabled={customWorkflow.steps.length === 0}
+                      className="flex-1 bg-gradient-hero hover:bg-gradient-hero/90"
+                    >
+                      Create Custom Workflow
+                    </Button>
+                    
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowCustomBuilder(false)}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Workflow Modal */}
+      {showEditWorkflow && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <Card>
+              <CardHeader>
+                <CardTitle>Edit Workflow: {editingWorkflow?.name}</CardTitle>
+                <CardDescription>
+                  Modify your existing workflow configuration
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleUpdateWorkflow} className="space-y-6">
+                  {/* Basic Info */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Workflow Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={customWorkflow.name}
+                      onChange={(e) => setCustomWorkflow(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                      placeholder="e.g., Engineering Hiring Workflow"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Description</label>
+                    <textarea
+                      value={customWorkflow.description}
+                      onChange={(e) => setCustomWorkflow(prev => ({ ...prev, description: e.target.value }))}
+                      rows={3}
+                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                      placeholder="Describe what this workflow does..."
+                    />
+                  </div>
+
+                  {/* Add New Step */}
+                  <div className="border border-border rounded-lg p-4 space-y-4">
+                    <h3 className="text-lg font-semibold text-foreground">Add Workflow Step</h3>
+                    
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Step Type</label>
+                      <select
+                        value={newStep.type}
+                        onChange={(e) => setNewStep(prev => ({ ...prev, type: e.target.value as any }))}
+                        className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                      >
+
+                        <option value="resume_analysis">📄 Resume Analysis</option>
+                        <option value="human_approval">👤 Human Approval</option>
+                        <option value="task_assignment">📝 Task Assignment</option>
+                        <option value="task_review">🔍 Review Task Assignment</option>
+                        <option value="interview_scheduling">📅 Interview Scheduling</option>
+                        <option value="ai_interview">🤖 AI Interview</option>
+                        <option value="offer_letter">📜 Offer Letter</option>
+                        <option value="custom">⚙️ Custom Action</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Description</label>
+                      <input
+                        type="text"
+                        value={newStep.description}
+                        onChange={(e) => setNewStep(prev => ({ ...prev, description: e.target.value }))}
+                        className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                        placeholder="What does this step do?"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Delay (hours)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="168"
+                          value={newStep.delayHours}
+                          onChange={(e) => setNewStep(prev => ({ ...prev, delayHours: parseInt(e.target.value) || 0 }))}
+                          className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                          placeholder="0"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Approvers</label>
+                        <select
+                          multiple
+                          value={newStep.approvers}
+                          onChange={(e) => {
+                            const selectedOptions = Array.from(e.target.selectedOptions, option => option.value)
+                            setNewStep(prev => ({ ...prev, approvers: selectedOptions }))
+                          }}
+                          className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth min-h-[100px]"
+                        >
+                          {users.map(user => (
+                            <option key={user.id} value={user.id}>
+                              {user.firstName} {user.lastName} ({user.role.displayName})
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">Hold Ctrl/Cmd to select multiple users</p>
+                      </div>
+
+                      <div className="space-y-3 pt-6">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={newStep.requiresApproval}
+                            onChange={(e) => setNewStep(prev => ({ ...prev, requiresApproval: e.target.checked }))}
+                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
+                          />
+                          <span className="text-sm text-foreground">Requires Approval</span>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={newStep.aiEmailEnabled}
+                            onChange={(e) => setNewStep(prev => ({ ...prev, aiEmailEnabled: e.target.checked }))}
+                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
+                          />
+                          <span className="text-sm text-foreground">AI Email Enabled</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={editingStepIndex !== null ? handleUpdateStep : handleAddStep}
+                        className="flex-1 bg-primary hover:bg-primary/90"
+                      >
+                        <span className="mr-2">
+                          {editingStepIndex !== null ? '✏️' : '➕'}
+                        </span>
+                        {editingStepIndex !== null ? 'Update Step' : 'Add Step to Workflow'}
+                      </Button>
+                      
+                      {editingStepIndex !== null && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleCancelEdit}
+                          className="px-6"
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Current Steps */}
+                  {customWorkflow.steps.length > 0 && (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-foreground">Workflow Steps ({customWorkflow.steps.length})</h3>
+                      <div className="space-y-3">
+                        {customWorkflow.steps.map((step, index) => (
+                          <div key={index} className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                            <div className="flex items-center space-x-4">
+                              <span className="text-sm font-medium text-muted-foreground">#{index + 1}</span>
+                              <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStepColor(step.type)}`}>
+                                <span>{getStepIcon(step.type)}</span>
+                                <span>{step.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                              </span>
+                              <div className="text-sm text-muted-foreground">
+                                {step.description}
+                              </div>
+                              <div className="flex items-center space-x-2 text-xs">
+                                {step.delayHours > 0 && (
+                                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                    ⏰ {step.delayHours}h
+                                  </span>
+                                )}
+                                {step.requiresApproval && (
+                                  <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                    👤 Approval
+                                  </span>
+                                  )}
+                                {step.aiEmailEnabled && (
+                                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
+                                    📧 AI Email
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditStep(index)}
+                                className="border-primary text-primary hover:bg-primary/10"
+                              >
+                                <span className="mr-1">✏️</span>
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRemoveStep(index)}
+                                className="border-destructive text-destructive hover:bg-destructive/10"
+                              >
+                                <span className="mr-1">🗑️</span>
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-4 pt-6 border-t border-border">
+                    <Button
+                      type="submit"
+                      disabled={customWorkflow.steps.length === 0}
+                      className="flex-1 bg-gradient-hero hover:bg-gradient-hero/90"
+                    >
+                      Update Workflow
+                    </Button>
+                    
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleCancelEditWorkflow}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default WorkflowBuilderPage
