@@ -591,6 +591,7 @@ const WorkflowBuilderPage = () => {
                           setNewStep(prev => ({ 
                             ...prev, 
                             type: e.target.value as any,
+                            name: selectedStep?.name || prev.name,
                             description: selectedStep?.description || prev.description
                           }))
                         }}
