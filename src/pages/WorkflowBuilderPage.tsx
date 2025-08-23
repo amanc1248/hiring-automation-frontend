@@ -3,6 +3,7 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { useAuth } from '../hooks/useAuth'
 import { workflowService } from '../services/workflowService'
+import { workflowApiService, type WorkflowStep as ApiWorkflowStep } from '../services/workflowApiService'
 import { jobService } from '../services/jobService'
 import { userService } from '../services/userService'
 import type { Workflow, WorkflowStep, WorkflowTemplate, WorkflowStats } from '../types/workflow'
@@ -16,6 +17,7 @@ const WorkflowBuilderPage = () => {
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([])
   const [stats, setStats] = useState<WorkflowStats | null>(null)
   const [users, setUsers] = useState<User[]>([])
+  const [availableSteps, setAvailableSteps] = useState<ApiWorkflowStep[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [showCustomBuilder, setShowCustomBuilder] = useState(false)
@@ -81,18 +83,20 @@ const WorkflowBuilderPage = () => {
     if (!company) return
     setIsLoading(true)
     try {
-      const [workflowsData, jobsData, templatesData, statsData, usersData] = await Promise.all([
+      const [workflowsData, jobsData, templatesData, statsData, usersData, availableStepsData] = await Promise.all([
         workflowService.getWorkflows(company.id),
         jobService.getJobs(company.id),
         workflowService.getWorkflowTemplates(),
         workflowService.getWorkflowStats(company.id),
-        userService.getUsers(company.id, { page: 1, limit: 100, status: 'active' })
+        userService.getUsers(company.id, { page: 1, limit: 100, status: 'active' }),
+        workflowApiService.getWorkflowSteps()
       ])
       setWorkflows(workflowsData)
       setJobs(jobsData)
       setTemplates(templatesData)
       setStats(statsData)
       setUsers(usersData.users)
+      setAvailableSteps(availableStepsData)
     } catch (error) {
       console.error('Failed to load workflow data:', error)
     } finally {
@@ -349,14 +353,18 @@ const WorkflowBuilderPage = () => {
 
   const getStepIcon = (stepType: string) => {
     switch (stepType) {
-      case 'resume_analysis': return '📄'
-      case 'human_approval': return '👤'
-      case 'task_assignment': return '📝'
+      case 'resume_analysis':
+      case 'automated': return '📄'
+      case 'human_approval':
+      case 'approval': return '👤'
+      case 'task_assignment':
+      case 'manual': return '📝'
       case 'task_review': return '🔍'
       case 'interview_scheduling': return '📅'
       case 'ai_interview': return '🤖'
       case 'offer_letter': return '📜'
-      default: return '⚙️'
+      case 'custom': return '⚙️'
+      default: return '📋'
     }
   }
 
@@ -792,17 +800,23 @@ const WorkflowBuilderPage = () => {
                       <label className="text-sm font-medium text-foreground">Step Type</label>
                       <select
                         value={newStep.type}
-                        onChange={(e) => setNewStep(prev => ({ ...prev, type: e.target.value as any }))}
+                        onChange={(e) => {
+                          const selectedStep = availableSteps.find(step => step.id === e.target.value)
+                          setNewStep(prev => ({ 
+                            ...prev, 
+                            type: e.target.value as any,
+                            description: selectedStep?.description || prev.description
+                          }))
+                        }}
                         className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
                       >
 
-                        <option value="resume_analysis">📄 Resume Analysis</option>
-                        <option value="human_approval">👤 Human Approval</option>
-                        <option value="task_assignment">📝 Task Assignment</option>
-                        <option value="task_review">🔍 Review Task Assignment</option>
-                        <option value="interview_scheduling">📅 Interview Scheduling</option>
-                        <option value="ai_interview">🤖 AI Interview</option>
-                        <option value="offer_letter">📜 Offer Letter</option>
+                        <option value="">Select a workflow step...</option>
+                        {availableSteps.map((step) => (
+                          <option key={step.id} value={step.id}>
+                            {getStepIcon(step.step_type)} {step.name}
+                          </option>
+                        ))}
                         <option value="custom">⚙️ Custom Action</option>
                       </select>
                     </div>
@@ -1032,17 +1046,23 @@ const WorkflowBuilderPage = () => {
                       <label className="text-sm font-medium text-foreground">Step Type</label>
                       <select
                         value={newStep.type}
-                        onChange={(e) => setNewStep(prev => ({ ...prev, type: e.target.value as any }))}
+                        onChange={(e) => {
+                          const selectedStep = availableSteps.find(step => step.id === e.target.value)
+                          setNewStep(prev => ({ 
+                            ...prev, 
+                            type: e.target.value as any,
+                            description: selectedStep?.description || prev.description
+                          }))
+                        }}
                         className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
                       >
 
-                        <option value="resume_analysis">📄 Resume Analysis</option>
-                        <option value="human_approval">👤 Human Approval</option>
-                        <option value="task_assignment">📝 Task Assignment</option>
-                        <option value="task_review">🔍 Review Task Assignment</option>
-                        <option value="interview_scheduling">📅 Interview Scheduling</option>
-                        <option value="ai_interview">🤖 AI Interview</option>
-                        <option value="offer_letter">📜 Offer Letter</option>
+                        <option value="">Select a workflow step...</option>
+                        {availableSteps.map((step) => (
+                          <option key={step.id} value={step.id}>
+                            {getStepIcon(step.step_type)} {step.name}
+                          </option>
+                        ))}
                         <option value="custom">⚙️ Custom Action</option>
                       </select>
                     </div>
