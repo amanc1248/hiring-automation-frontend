@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { useAuth } from '../hooks/useAuth'
 import { emailService } from '../services/emailService'
 import { gmailApiService } from '../services/gmailApiService'
+import { API_CONFIG, tokenStorage } from '../config/api'
 import type { EmailAccount, EmailStats } from '../types/email'
 
 const EmailConfigPage = () => {
@@ -13,12 +14,14 @@ const EmailConfigPage = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [showConnectForm, setShowConnectForm] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
-
+  const [pollingStatus, setPollingStatus] = useState<'running' | 'stopped' | 'loading'>('loading')
+  const [isPollingControlLoading, setIsPollingControlLoading] = useState(false)
 
 
   useEffect(() => {
     if (company) {
       loadEmailData()
+      loadPollingStatus()
     }
   }, [company])
 
@@ -159,6 +162,104 @@ const EmailConfigPage = () => {
     }
   }
 
+  const loadPollingStatus = async () => {
+    try {
+      console.log('Loading polling status...')
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/emails/polling/status`, {
+        headers: {
+          'Authorization': `Bearer ${tokenStorage.getAccessToken()}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Polling status response:', data)
+        setPollingStatus(data.data.is_running ? 'running' : 'stopped')
+      } else {
+        console.error('Failed to load polling status:', response.status, response.statusText)
+        setPollingStatus('stopped')
+      }
+    } catch (error) {
+      console.error('Failed to load polling status:', error)
+      setPollingStatus('stopped')
+    }
+  }
+
+  const handleStartPolling = async () => {
+    setIsPollingControlLoading(true)
+    try {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/emails/polling/start`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${tokenStorage.getAccessToken()}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        setPollingStatus('running')
+        alert('Email polling started successfully!')
+      } else {
+        const error = await response.json()
+        alert(`Failed to start polling: ${error.detail}`)
+      }
+    } catch (error) {
+      console.error('Failed to start polling:', error)
+      alert('Failed to start email polling')
+    } finally {
+      setIsPollingControlLoading(false)
+    }
+  }
+
+  const handleStopPolling = async () => {
+    setIsPollingControlLoading(true)
+    try {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/emails/polling/stop`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${tokenStorage.getAccessToken()}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        setPollingStatus('stopped')
+        alert('Email polling stopped successfully!')
+      } else {
+        const error = await response.json()
+        alert(`Failed to stop polling: ${error.detail}`)
+      }
+    } catch (error) {
+      console.error('Failed to stop polling:', error)
+      alert('Failed to stop email polling')
+    } finally {
+      setIsPollingControlLoading(false)
+    }
+  }
+
+  const handleTestPolling = async () => {
+    try {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/emails/polling/test`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${tokenStorage.getAccessToken()}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        alert('Test poll completed successfully! Check the backend logs for details.')
+      } else {
+        const error = await response.json()
+        alert(`Test poll failed: ${error.detail}`)
+      }
+    } catch (error) {
+      console.error('Failed to test polling:', error)
+      alert('Failed to test email polling')
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-64">
@@ -189,6 +290,92 @@ const EmailConfigPage = () => {
           Connect Email Account
         </Button>
       </div>
+
+      {/* Email Polling Controls */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <span className="text-2xl">🔄</span>
+            Email Polling Service
+          </CardTitle>
+          <CardDescription>
+            Control the automated email monitoring service that checks for new job applications
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className={`w-3 h-3 rounded-full ${
+                pollingStatus === 'running' ? 'bg-green-500' : 
+                pollingStatus === 'stopped' ? 'bg-red-500' : 'bg-yellow-500'
+              }`}></span>
+              <span className="text-sm font-medium">
+                Status: {pollingStatus === 'running' ? 'Running' : 
+                         pollingStatus === 'stopped' ? 'Stopped' : 'Loading...'}
+              </span>
+            </div>
+            
+            <div className="flex gap-2">
+              {pollingStatus === 'stopped' ? (
+                <Button
+                  onClick={handleStartPolling}
+                  disabled={isPollingControlLoading}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {isPollingControlLoading ? (
+                    <>
+                      <span className="mr-2 animate-spin">⏳</span>
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <span className="mr-2">▶️</span>
+                      Start Polling
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleStopPolling}
+                  disabled={isPollingControlLoading}
+                  variant="outline"
+                  className="border-red-500 text-red-500 hover:bg-red-50"
+                >
+                  {isPollingControlLoading ? (
+                    <>
+                      <span className="mr-2 animate-spin">⏳</span>
+                      Stopping...
+                    </>
+                  ) : (
+                    <>
+                      <span className="mr-2">⏹️</span>
+                      Stop Polling
+                    </>
+                  )}
+                </Button>
+              )}
+              
+              {pollingStatus === 'running' && (
+                <Button
+                  onClick={handleTestPolling}
+                  variant="outline"
+                  className="border-blue-500 text-blue-500 hover:bg-blue-50"
+                >
+                  <span className="mr-2">🧪</span>
+                  Test Poll
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+            <p className="text-sm text-muted-foreground">
+              <strong>How it works:</strong> The polling service checks all configured Gmail accounts every 60 seconds 
+              for new emails. When a job application is detected, it automatically starts the appropriate workflow.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Email Stats */}
       {emailStats && (
