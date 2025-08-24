@@ -108,12 +108,21 @@ const WorkflowBuilderPage = () => {
           throw new Error(`Cannot save template with custom steps. Please use only predefined workflow steps.`)
         }
         
+        // Debug logging for approval settings
+        console.log(`Step ${index + 1} Debug:`, {
+          name: step.name,
+          requiresApproval: step.requiresApproval,
+          approvers: step.approvers,
+          approversLength: step.approvers?.length || 0
+        })
+        
         return {
           workflow_step_id: workflowStepId,
           delay_in_seconds: step.delayHours * 3600, // Convert hours to seconds
           auto_start: step.autoStart,
           required_human_approval: step.requiresApproval,
           number_of_approvals_needed: step.requiresApproval ? step.approvers.length : undefined,
+          approvers: step.requiresApproval ? step.approvers : [],
           order_number: index + 1
         }
       })
