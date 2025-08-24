@@ -43,7 +43,7 @@ const WorkflowBuilderPage = () => {
       delayHours: number
       requiresApproval: boolean
       approvers: string[]
-      numberOfApprovalsNeeded: number
+
       autoStart: boolean
     }>
   })
@@ -55,7 +55,7 @@ const WorkflowBuilderPage = () => {
     delayHours: 0,
     requiresApproval: false,
     approvers: [] as string[],
-    numberOfApprovalsNeeded: 1,
+
     autoStart: false
   })
 
@@ -113,7 +113,7 @@ const WorkflowBuilderPage = () => {
           delay_in_seconds: step.delayHours * 3600, // Convert hours to seconds
           auto_start: step.autoStart,
           required_human_approval: step.requiresApproval,
-          number_of_approvals_needed: step.requiresApproval ? step.numberOfApprovalsNeeded : undefined,
+          number_of_approvals_needed: step.requiresApproval ? step.approvers.length : undefined,
           order_number: index + 1
         }
       })
@@ -170,7 +170,7 @@ const WorkflowBuilderPage = () => {
       delayHours: 0,
       requiresApproval: false,
       approvers: [],
-      numberOfApprovalsNeeded: 1,
+  
       autoStart: false
     })
   }
@@ -191,7 +191,7 @@ const WorkflowBuilderPage = () => {
       delayHours: step.delayHours,
       requiresApproval: step.requiresApproval,
       approvers: step.approvers,
-      numberOfApprovalsNeeded: step.numberOfApprovalsNeeded || 1,
+
       autoStart: step.autoStart || false
     })
     setEditingStepIndex(index)
@@ -221,7 +221,7 @@ const WorkflowBuilderPage = () => {
       delayHours: 0,
       requiresApproval: false,
       approvers: [],
-      numberOfApprovalsNeeded: 1,
+  
       autoStart: false
     })
     setEditingStepIndex(null)
@@ -236,7 +236,7 @@ const WorkflowBuilderPage = () => {
       delayHours: 0,
       requiresApproval: false,
       approvers: [],
-      numberOfApprovalsNeeded: 1,
+  
       autoStart: false
     })
     setEditingStepIndex(null)
@@ -261,7 +261,7 @@ const WorkflowBuilderPage = () => {
         delayHours: step.config.delayBeforeExecution || 0,
         requiresApproval: step.config.requiresApproval,
         approvers: step.config.approvers || [],
-        numberOfApprovalsNeeded: 1,
+    
         autoStart: step.config.autoProceed || false
       }))
     })
@@ -610,8 +610,47 @@ const WorkflowBuilderPage = () => {
                         />
                       </div>
 
+                      <div className="space-y-3 pt-6">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={newStep.requiresApproval}
+                            onChange={(e) => {
+                              setNewStep(prev => ({ 
+                                ...prev, 
+                                requiresApproval: e.target.checked,
+                                // Clear approvers when unchecking requires approval
+                                approvers: e.target.checked ? prev.approvers : []
+                              }))
+                            }}
+                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
+                          />
+                          <span className="text-sm text-foreground">Requires Approval</span>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={newStep.autoStart}
+                            onChange={(e) => setNewStep(prev => ({ ...prev, autoStart: e.target.checked }))}
+                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
+                          />
+                          <span className="text-sm text-foreground">Auto Start</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Approvers List - Show only when requires approval is checked */}
+                    {newStep.requiresApproval && (
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground">Approvers</label>
+                        <label className="text-sm font-medium text-foreground">
+                          Approvers 
+                          {newStep.approvers.length > 0 && (
+                            <span className="text-xs text-muted-foreground ml-2">
+                              ({newStep.approvers.length} selected - all required to approve)
+                            </span>
+                          )}
+                        </label>
                         <select
                           multiple
                           value={newStep.approvers}
@@ -633,48 +672,9 @@ const WorkflowBuilderPage = () => {
                               ))
                           )}
                         </select>
-                        <p className="text-xs text-muted-foreground">Hold Ctrl/Cmd to select multiple users</p>
-                      </div>
-
-                      <div className="space-y-3 pt-6">
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newStep.requiresApproval}
-                            onChange={(e) => setNewStep(prev => ({ ...prev, requiresApproval: e.target.checked }))}
-                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
-                          />
-                          <span className="text-sm text-foreground">Requires Approval</span>
-                        </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newStep.autoStart}
-                            onChange={(e) => setNewStep(prev => ({ ...prev, autoStart: e.target.checked }))}
-                            className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
-                          />
-                          <span className="text-sm text-foreground">Auto Start</span>
-                        </div>
-                        
-
-                      </div>
-                    </div>
-
-                    {/* Number of Approvals Needed - Show only when requires approval is checked */}
-                    {newStep.requiresApproval && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground">Number of Approvals Needed</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="10"
-                          value={newStep.numberOfApprovalsNeeded}
-                          onChange={(e) => setNewStep(prev => ({ ...prev, numberOfApprovalsNeeded: parseInt(e.target.value) || 1 }))}
-                          className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                          placeholder="1"
-                        />
-                        <p className="text-xs text-muted-foreground">How many approvals are required to proceed</p>
+                        <p className="text-xs text-muted-foreground">
+                          Hold Ctrl/Cmd to select multiple users. All selected approvers must approve to proceed.
+                        </p>
                       </div>
                     )}
 
