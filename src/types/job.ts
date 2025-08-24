@@ -1,3 +1,74 @@
+// API Response Types that match our backend
+export interface JobResponse {
+  id: string
+  title: string
+  description: string
+  requirements?: string
+  department?: string
+  location?: string
+  job_type: 'full-time' | 'part-time' | 'contract' | 'internship'
+  experience_level?: 'entry' | 'mid' | 'senior' | 'executive'
+  remote_policy?: 'remote' | 'hybrid' | 'onsite'
+  salary_min?: number
+  salary_max?: number
+  salary_currency?: string
+  status: 'draft' | 'active' | 'paused' | 'closed'
+  workflow_template_id?: string
+  posted_at?: string
+  expires_at?: string
+  is_featured: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface JobListResponse {
+  jobs: JobResponse[]
+  total: number
+  skip: number
+  limit: number
+}
+
+export interface JobCreateRequest {
+  title: string
+  description: string
+  requirements?: string
+  department?: string
+  location?: string
+  job_type: 'full-time' | 'part-time' | 'contract' | 'internship'
+  experience_level?: 'entry' | 'mid' | 'senior' | 'executive'
+  remote_policy?: 'remote' | 'hybrid' | 'onsite'
+  salary_min?: number
+  salary_max?: number
+  salary_currency?: string
+  status?: 'draft' | 'active' | 'paused' | 'closed'
+  workflow_template_id?: string
+  assigned_to?: string
+  posted_at?: string
+  expires_at?: string
+  is_featured?: boolean
+}
+
+export interface JobUpdateRequest {
+  title?: string
+  description?: string
+  requirements?: string
+  department?: string
+  location?: string
+  job_type?: 'full-time' | 'part-time' | 'contract' | 'internship'
+  experience_level?: 'entry' | 'mid' | 'senior' | 'executive'
+  remote_policy?: 'remote' | 'hybrid' | 'onsite'
+  salary_min?: number
+  salary_max?: number
+  salary_currency?: string
+  status?: 'draft' | 'active' | 'paused' | 'closed'
+  workflow_template_id?: string
+  assigned_to?: string
+  posted_at?: string
+  expires_at?: string
+  is_featured?: boolean
+}
+
+// Legacy types for backward compatibility (can be removed later)
 export interface JobRequirement {
   id: string
   name: string

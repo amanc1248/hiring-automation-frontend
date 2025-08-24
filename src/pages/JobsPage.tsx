@@ -1,30 +1,30 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '../components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Card, CardContent, CardHeader } from '../components/ui/card'
 import { useAuth } from '../hooks/useAuth'
 import { jobService } from '../services/jobService'
 import JobForm from '../components/jobs/JobForm'
-import type { JobPosting } from '../types/job'
+import type { JobResponse } from '../types/job'
 
 const JobsPage = () => {
-  const { company } = useAuth()
-  const [jobs, setJobs] = useState<JobPosting[]>([])
+  const { user } = useAuth()
+  const [jobs, setJobs] = useState<JobResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'draft' | 'published' | 'closed'>('all')
+  const [filter, setFilter] = useState<'all' | 'draft' | 'active' | 'paused' | 'closed'>('all')
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [editingJob, setEditingJob] = useState<JobResponse | null>(null)
 
   useEffect(() => {
-    if (company) {
+    if (user) {
       loadJobs()
     }
-  }, [company])
+  }, [user])
 
   const loadJobs = async () => {
-    if (!company) return
     setIsLoading(true)
     try {
-      const companyJobs = await jobService.getJobs(company.id)
-      setJobs(companyJobs)
+      const response = await jobService.getJobs()
+      setJobs(response.jobs)
     } catch (error) {
       console.error('Failed to load jobs:', error)
     } finally {
@@ -32,16 +32,13 @@ const JobsPage = () => {
     }
   }
 
-  const handleStatusChange = async (jobId: string, newStatus: 'published' | 'closed') => {
+  const handleStatusChange = async (jobId: string, newStatus: 'active' | 'closed' | 'paused') => {
     try {
-      if (newStatus === 'published') {
-        await jobService.publishJob(jobId)
-      } else if (newStatus === 'closed') {
-        await jobService.closeJob(jobId)
-      }
+      await jobService.updateJobStatus(jobId, newStatus)
       await loadJobs() // Reload jobs
     } catch (error) {
       console.error('Failed to update job status:', error)
+      alert('Failed to update job status. Please try again.')
     }
   }
 
@@ -52,8 +49,14 @@ const JobsPage = () => {
         await loadJobs() // Reload jobs
       } catch (error) {
         console.error('Failed to delete job:', error)
+        alert('Failed to delete job. Please try again.')
       }
     }
+  }
+
+  const handleEditJob = (job: JobResponse) => {
+    setEditingJob(job)
+    setShowCreateForm(true)
   }
 
   const filteredJobs = jobs.filter(job => {
@@ -64,9 +67,9 @@ const JobsPage = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft': return 'bg-muted text-muted-foreground'
-      case 'published': return 'bg-success text-success-foreground'
+      case 'active': return 'bg-success text-success-foreground'
+      case 'paused': return 'bg-warning text-warning-foreground'
       case 'closed': return 'bg-destructive text-destructive-foreground'
-      case 'archived': return 'bg-muted text-muted-foreground'
       default: return 'bg-muted text-muted-foreground'
     }
   }
@@ -74,11 +77,24 @@ const JobsPage = () => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'draft': return '📝'
-      case 'published': return '✅'
+      case 'active': return '✅'
+      case 'paused': return '⏸️'
       case 'closed': return '❌'
-      case 'archived': return '📦'
       default: return '❓'
     }
+  }
+
+  const formatSalary = (min?: number, max?: number, currency?: string) => {
+    if (!min && !max) return 'Salary not specified'
+    const curr = currency || 'USD'
+    if (min && max) {
+      return `${curr} ${min.toLocaleString()} - ${max.toLocaleString()}`
+    } else if (min) {
+      return `${curr} ${min.toLocaleString()}+`
+    } else if (max) {
+      return `Up to ${curr} ${max.toLocaleString()}`
+    }
+    return 'Salary not specified'
   }
 
   if (isLoading) {
@@ -102,19 +118,22 @@ const JobsPage = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground font-display">Job Management</h1>
           <p className="text-muted-foreground">Create and manage your job postings</p>
         </div>
-                  <Button 
-            size="lg" 
-            className="bg-gradient-hero hover:bg-gradient-hero/90 w-full sm:w-auto"
-            onClick={() => setShowCreateForm(true)}
-          >
-            <span className="mr-2">➕</span>
-            Create New Job
-          </Button>
+        <Button 
+          size="lg" 
+          className="bg-gradient-hero hover:bg-gradient-hero/90 w-full sm:w-auto"
+          onClick={() => {
+            setEditingJob(null)
+            setShowCreateForm(true)
+          }}
+        >
+          <span className="mr-2">➕</span>
+          Create New Job
+        </Button>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
-        {(['all', 'draft', 'published', 'closed'] as const).map((status) => (
+        {(['all', 'draft', 'active', 'paused', 'closed'] as const).map((status) => (
           <Button
             key={status}
             variant={filter === status ? 'default' : 'outline'}
@@ -156,9 +175,9 @@ const JobsPage = () => {
               </div>
               <div>
                 <p className="text-2xl font-bold text-foreground">
-                  {jobs.filter(job => job.status === 'published').length}
+                  {jobs.filter(job => job.status === 'active').length}
                 </p>
-                <p className="text-sm text-muted-foreground">Published</p>
+                <p className="text-sm text-muted-foreground">Active</p>
               </div>
             </div>
           </CardContent>
@@ -187,9 +206,7 @@ const JobsPage = () => {
                 <span className="text-primary text-lg">👥</span>
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">
-                  {jobs.reduce((total, job) => total + job.totalApplications, 0)}
-                </p>
+                <p className="text-2xl font-bold text-foreground">0</p>
                 <p className="text-sm text-muted-foreground">Total Applications</p>
               </div>
             </div>
@@ -211,7 +228,14 @@ const JobsPage = () => {
                 }
               </p>
               {filter === 'all' && (
-                <Button size="lg" className="bg-gradient-hero hover:bg-gradient-hero/90">
+                <Button 
+                  size="lg" 
+                  className="bg-gradient-hero hover:bg-gradient-hero/90"
+                  onClick={() => {
+                    setEditingJob(null)
+                    setShowCreateForm(true)
+                  }}
+                >
                   <span className="mr-2">➕</span>
                   Create Your First Job
                 </Button>
@@ -232,28 +256,33 @@ const JobsPage = () => {
                       </span>
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                      <span className="flex items-center space-x-1">
-                        <span>🏢</span>
-                        <span>{job.department}</span>
-                      </span>
-                      <span className="flex items-center space-x-1">
-                        <span>📍</span>
-                        <span>
-                          {job.location.type === 'remote' ? 'Remote' : 
-                           job.location.type === 'hybrid' ? 'Hybrid' : 'On-site'}
-                          {job.location.city && ` - ${job.location.city}`}
+                      {job.department && (
+                        <span className="flex items-center space-x-1">
+                          <span>🏢</span>
+                          <span>{job.department}</span>
                         </span>
-                      </span>
+                      )}
+                      {(job.location || job.remote_policy) && (
+                        <span className="flex items-center space-x-1">
+                          <span>📍</span>
+                          <span>
+                            {job.remote_policy === 'remote' ? 'Remote' : 
+                             job.remote_policy === 'hybrid' ? 'Hybrid' : 
+                             job.remote_policy === 'onsite' ? 'On-site' : 'Office'}
+                            {job.location && job.remote_policy !== 'remote' && ` - ${job.location}`}
+                          </span>
+                        </span>
+                      )}
                       <span className="flex items-center space-x-1">
                         <span>💰</span>
-                        <span>
-                          ${job.salary.min.toLocaleString()} - ${job.salary.max.toLocaleString()}
+                        <span>{formatSalary(job.salary_min, job.salary_max, job.salary_currency)}</span>
+                      </span>
+                      {job.experience_level && (
+                        <span className="flex items-center space-x-1">
+                          <span>🎯</span>
+                          <span className="capitalize">{job.experience_level}</span>
                         </span>
-                      </span>
-                      <span className="flex items-center space-x-1">
-                        <span>👥</span>
-                        <span>{job.totalApplications} applications</span>
-                      </span>
+                      )}
                     </div>
                   </div>
                   
@@ -261,7 +290,7 @@ const JobsPage = () => {
                     {job.status === 'draft' && (
                       <Button
                         size="sm"
-                        onClick={() => handleStatusChange(job.id, 'published')}
+                        onClick={() => handleStatusChange(job.id, 'active')}
                         className="bg-success hover:bg-success/90"
                       >
                         <span className="mr-1">✅</span>
@@ -269,22 +298,44 @@ const JobsPage = () => {
                       </Button>
                     )}
                     
-                    {job.status === 'published' && (
+                    {job.status === 'active' && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleStatusChange(job.id, 'paused')}
+                          className="border-warning text-warning hover:bg-warning/10"
+                        >
+                          <span className="mr-1">⏸️</span>
+                          Pause
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleStatusChange(job.id, 'closed')}
+                          className="border-destructive text-destructive hover:bg-destructive/10"
+                        >
+                          <span className="mr-1">❌</span>
+                          Close
+                        </Button>
+                      </>
+                    )}
+
+                    {job.status === 'paused' && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => handleStatusChange(job.id, 'closed')}
-                        className="border-warning text-warning hover:bg-warning/10"
+                        onClick={() => handleStatusChange(job.id, 'active')}
+                        className="bg-success hover:bg-success/90"
                       >
-                        <span className="mr-1">❌</span>
-                        Close
+                        <span className="mr-1">▶️</span>
+                        Resume
                       </Button>
                     )}
                     
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {/* TODO: Edit job */}}
+                      onClick={() => handleEditJob(job)}
                     >
                       <span className="mr-1">✏️</span>
                       Edit
@@ -308,31 +359,18 @@ const JobsPage = () => {
                   {job.description}
                 </p>
                 
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-medium text-foreground mb-2">Key Requirements:</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {job.requirements.slice(0, 4).map((req) => (
-                        <span
-                          key={req.id}
-                          className="inline-flex items-center space-x-1 px-2 py-1 bg-muted rounded-md text-xs"
-                        >
-                          <span>{req.name}</span>
-                          <span className="text-muted-foreground">({req.level})</span>
-                        </span>
-                      ))}
-                      {job.requirements.length > 4 && (
-                        <span className="text-xs text-muted-foreground">
-                          +{job.requirements.length - 4} more
-                        </span>
-                      )}
+                {job.requirements && (
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-sm font-medium text-foreground mb-2">Requirements:</h4>
+                      <p className="text-sm text-muted-foreground">{job.requirements}</p>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Created: {new Date(job.createdAt).toLocaleDateString()}</span>
-                    <span>Email: {job.applicationEmail}</span>
-                  </div>
+                )}
+                
+                <div className="flex items-center justify-between text-xs text-muted-foreground mt-4 pt-4 border-t">
+                  <span>Created: {new Date(job.created_at).toLocaleDateString()}</span>
+                  <span>Updated: {new Date(job.updated_at).toLocaleDateString()}</span>
                 </div>
               </CardContent>
             </Card>
@@ -340,16 +378,21 @@ const JobsPage = () => {
         )}
       </div>
 
-      {/* Create Job Modal */}
+      {/* Create/Edit Job Modal */}
       {showCreateForm && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <JobForm
+              job={editingJob}
               onSuccess={() => {
                 setShowCreateForm(false)
+                setEditingJob(null)
                 loadJobs()
               }}
-              onCancel={() => setShowCreateForm(false)}
+              onCancel={() => {
+                setShowCreateForm(false)
+                setEditingJob(null)
+              }}
             />
           </div>
         </div>

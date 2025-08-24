@@ -3,151 +3,79 @@ import { Button } from '../ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card'
 import { useAuth } from '../../hooks/useAuth'
 import { jobService } from '../../services/jobService'
-import { emailService } from '../../services/emailService'
-import { workflowService } from '../../services/workflowService'
-import type { JobCreateData, JobRequirement, JobLocation, JobSalary } from '../../types/job'
-import type { EmailAccount } from '../../types/email'
-import type { WorkflowTemplate } from '../../types/workflow'
+import type { JobResponse, JobCreateRequest, JobUpdateRequest } from '../../types/job'
 
 interface JobFormProps {
+  job?: JobResponse | null
   onSuccess?: () => void
   onCancel?: () => void
 }
 
-const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
-  const { company } = useAuth()
+const JobForm = ({ job, onSuccess, onCancel }: JobFormProps) => {
+  const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
-  const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([])
-  const [workflowTemplates, setWorkflowTemplates] = useState<WorkflowTemplate[]>([])
-  const [isLoadingData, setIsLoadingData] = useState(true)
-  const [formData, setFormData] = useState<JobCreateData>({
+  const [formData, setFormData] = useState<JobCreateRequest>({
     title: '',
-    department: '',
     description: '',
-    requirements: [],
-    location: {
-      type: 'remote',
-      city: '',
-      state: '',
-      country: '',
-      timezone: ''
-    },
-    salary: {
-      min: 0,
-      max: 0,
-      currency: 'USD',
-      period: 'yearly',
-      equity: false,
-      benefits: []
-    },
-    employmentType: 'full-time',
-    experienceLevel: 'mid',
-    applicationEmail: '',
-    workflowId: ''
+    requirements: '',
+    department: '',
+    location: '',
+    job_type: 'full-time',
+    experience_level: 'mid',
+    remote_policy: 'onsite',
+    salary_min: 0,
+    salary_max: 0,
+    salary_currency: 'USD',
+    status: 'draft'
   })
 
-  const [newRequirement, setNewRequirement] = useState({
-    name: '',
-    category: 'skill' as const,
-    level: 'intermediate' as const,
-    required: true
-  })
-
-  const [newBenefit, setNewBenefit] = useState('')
-
-  // Load email accounts and workflow templates
+  // Load job data if editing
   useEffect(() => {
-    const loadData = async () => {
-      if (!company) return
-      
-      setIsLoadingData(true)
-      try {
-        const [emailAccountsData, workflowTemplatesData] = await Promise.all([
-          emailService.getEmailAccounts(company.id),
-          workflowService.getWorkflowTemplates()
-        ])
-        
-        setEmailAccounts(emailAccountsData)
-        setWorkflowTemplates(workflowTemplatesData)
-      } catch (error) {
-        console.error('Failed to load data:', error)
-      } finally {
-        setIsLoadingData(false)
-      }
+    if (job) {
+      setFormData({
+        title: job.title,
+        description: job.description,
+        requirements: job.requirements || '',
+        department: job.department || '',
+        location: job.location || '',
+        job_type: job.job_type,
+        experience_level: job.experience_level || 'mid',
+        remote_policy: job.remote_policy || 'onsite',
+        salary_min: job.salary_min || 0,
+        salary_max: job.salary_max || 0,
+        salary_currency: job.salary_currency || 'USD',
+        status: job.status
+      })
     }
-
-    loadData()
-  }, [company])
+  }, [job])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!company) return
+    if (!user) return
 
     setIsLoading(true)
     try {
-      await jobService.createJob(formData, company.id)
+      if (job) {
+        // Update existing job
+        const updateData: JobUpdateRequest = { ...formData }
+        await jobService.updateJob(job.id, updateData)
+      } else {
+        // Create new job
+        await jobService.createJob(formData)
+      }
       onSuccess?.()
     } catch (error) {
-      console.error('Failed to create job:', error)
+      console.error('Failed to save job:', error)
+      alert('Failed to save job. Please try again.')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const addRequirement = () => {
-    if (newRequirement.name.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        requirements: [...prev.requirements, { ...newRequirement, id: `req-${Date.now()}` }]
-      }))
-      setNewRequirement({ name: '', category: 'skill', level: 'intermediate', required: true })
-    }
-  }
-
-  const removeRequirement = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      requirements: prev.requirements.filter((_, i) => i !== index)
-    }))
-  }
-
-  const addBenefit = () => {
-    if (newBenefit.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        salary: {
-          ...prev.salary,
-          benefits: [...(prev.salary.benefits || []), newBenefit.trim()]
-        }
-      }))
-      setNewBenefit('')
-    }
-  }
-
-  const removeBenefit = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      salary: {
-        ...prev.salary,
-        benefits: prev.salary.benefits?.filter((_, i) => i !== index) || []
-      }
-    }))
-  }
-
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: keyof JobCreateRequest, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
-    }))
-  }
-
-  const handleNestedChange = (parent: string, field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [parent]: {
-        ...(prev[parent as keyof JobCreateData] as any),
-        [field]: value
-      }
     }))
   }
 
@@ -155,9 +83,14 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
     <div className="max-w-4xl mx-auto">
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl font-bold">Create New Job Posting</CardTitle>
+          <CardTitle className="text-2xl font-bold">
+            {job ? 'Edit Job Posting' : 'Create New Job Posting'}
+          </CardTitle>
           <CardDescription>
-            Fill in the details below to create a new job posting for your company
+            {job 
+              ? 'Update the details of this job posting'
+              : 'Fill in the details below to create a new job posting for your company'
+            }
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -180,10 +113,9 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Department *</label>
+                  <label className="text-sm font-medium text-foreground">Department</label>
                   <input
                     type="text"
-                    required
                     value={formData.department}
                     onChange={(e) => handleChange('department', e.target.value)}
                     className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
@@ -203,103 +135,17 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
                   placeholder="Describe the role, responsibilities, and what you're looking for..."
                 />
               </div>
-            </div>
 
-            {/* Requirements */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Requirements</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Requirement Name</label>
-                  <input
-                    type="text"
-                    value={newRequirement.name}
-                    onChange={(e) => setNewRequirement(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                    placeholder="e.g., React"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Category</label>
-                  <select
-                    value={newRequirement.category}
-                    onChange={(e) => setNewRequirement(prev => ({ ...prev, category: e.target.value as any }))}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                  >
-                    <option value="skill">Skill</option>
-                    <option value="experience">Experience</option>
-                    <option value="education">Education</option>
-                    <option value="certification">Certification</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Level</label>
-                  <select
-                    value={newRequirement.level}
-                    onChange={(e) => setNewRequirement(prev => ({ ...prev, level: e.target.value as any }))}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                  >
-                    <option value="beginner">Beginner</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
-                    <option value="expert">Expert</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Required</label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={newRequirement.required}
-                      onChange={(e) => setNewRequirement(prev => ({ ...prev, required: e.target.checked }))}
-                      className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
-                    />
-                    <span className="text-sm text-muted-foreground">Required</span>
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Requirements</label>
+                <textarea
+                  rows={3}
+                  value={formData.requirements}
+                  onChange={(e) => handleChange('requirements', e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                  placeholder="e.g., 3+ years React, TypeScript, Node.js experience..."
+                />
               </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addRequirement}
-                className="w-full sm:w-auto"
-              >
-                <span className="mr-2">➕</span>
-                Add Requirement
-              </Button>
-
-              {/* Display Requirements */}
-              {formData.requirements.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-foreground">Current Requirements:</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.requirements.map((req, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center space-x-2 px-3 py-2 bg-muted rounded-lg text-sm"
-                      >
-                        <span className="font-medium">{req.name}</span>
-                        <span className="text-muted-foreground">({req.category}, {req.level})</span>
-                        <span className={req.required ? 'text-success' : 'text-muted-foreground'}>
-                          {req.required ? 'Required' : 'Optional'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeRequirement(index)}
-                          className="text-destructive hover:text-destructive/80"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Location & Employment */}
@@ -308,10 +154,10 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Location Type</label>
+                  <label className="text-sm font-medium text-foreground">Remote Policy</label>
                   <select
-                    value={formData.location.type}
-                    onChange={(e) => handleNestedChange('location', 'type', e.target.value)}
+                    value={formData.remote_policy}
+                    onChange={(e) => handleChange('remote_policy', e.target.value)}
                     className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
                   >
                     <option value="remote">Remote</option>
@@ -321,10 +167,10 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Employment Type</label>
+                  <label className="text-sm font-medium text-foreground">Job Type</label>
                   <select
-                    value={formData.employmentType}
-                    onChange={(e) => handleChange('employmentType', e.target.value)}
+                    value={formData.job_type}
+                    onChange={(e) => handleChange('job_type', e.target.value)}
                     className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
                   >
                     <option value="full-time">Full-time</option>
@@ -337,81 +183,54 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Experience Level</label>
                   <select
-                    value={formData.experienceLevel}
-                    onChange={(e) => handleChange('experienceLevel', e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                    value={formData.experience_level}
+                    onChange={(e) => handleChange('experience_level', e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
                   >
                     <option value="entry">Entry Level</option>
                     <option value="mid">Mid Level</option>
                     <option value="senior">Senior Level</option>
-                    <option value="lead">Lead</option>
                     <option value="executive">Executive</option>
                   </select>
                 </div>
               </div>
 
-              {formData.location.type !== 'remote' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">City</label>
-                    <input
-                      type="text"
-                      value={formData.location.city}
-                      onChange={(e) => handleNestedChange('location', 'city', e.target.value)}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                      placeholder="e.g., San Francisco"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">State</label>
-                    <input
-                      type="text"
-                      value={formData.location.state}
-                      onChange={(e) => handleNestedChange('location', 'state', e.target.value)}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                      placeholder="e.g., CA"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Country</label>
-                    <input
-                      type="text"
-                      value={formData.location.country}
-                      onChange={(e) => handleNestedChange('location', 'country', e.target.value)}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                      placeholder="e.g., USA"
-                    />
-                  </div>
+              {formData.remote_policy !== 'remote' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Office Location</label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => handleChange('location', e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                    placeholder="e.g., San Francisco, CA"
+                  />
                 </div>
               )}
             </div>
 
-            {/* Salary & Benefits */}
+            {/* Salary */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Salary & Benefits</h3>
+              <h3 className="text-lg font-semibold text-foreground">Salary</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Min Salary *</label>
+                  <label className="text-sm font-medium text-foreground">Min Salary</label>
                   <input
                     type="number"
-                    required
-                    value={formData.salary.min}
-                    onChange={(e) => handleNestedChange('salary', 'min', parseInt(e.target.value))}
+                    value={formData.salary_min || ''}
+                    onChange={(e) => handleChange('salary_min', e.target.value ? parseInt(e.target.value) : undefined)}
                     className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
                     placeholder="50000"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Max Salary *</label>
+                  <label className="text-sm font-medium text-foreground">Max Salary</label>
                   <input
                     type="number"
-                    required
-                    value={formData.salary.max}
-                    onChange={(e) => handleNestedChange('salary', 'max', parseInt(e.target.value))}
+                    value={formData.salary_max || ''}
+                    onChange={(e) => handleChange('salary_max', e.target.value ? parseInt(e.target.value) : undefined)}
                     className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
                     placeholder="80000"
                   />
@@ -420,8 +239,8 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Currency</label>
                   <select
-                    value={formData.salary.currency}
-                    onChange={(e) => handleNestedChange('salary', 'currency', e.target.value)}
+                    value={formData.salary_currency}
+                    onChange={(e) => handleChange('salary_currency', e.target.value)}
                     className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
                   >
                     <option value="USD">USD ($)</option>
@@ -430,127 +249,24 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
                     <option value="INR">INR (₹)</option>
                   </select>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Period</label>
-                  <select
-                    value={formData.salary.period}
-                    onChange={(e) => handleNestedChange('salary', 'period', e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                  >
-                    <option value="hourly">Hourly</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="yearly">Yearly</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.salary.equity}
-                    onChange={(e) => handleNestedChange('salary', 'equity', e.target.checked)}
-                    className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
-                  />
-                  <span className="text-sm text-foreground">Equity included</span>
-                </div>
-              </div>
-
-              {/* Benefits */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Benefits</label>
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={newBenefit}
-                    onChange={(e) => setNewBenefit(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                    placeholder="e.g., Health Insurance"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={addBenefit}
-                  >
-                    Add
-                  </Button>
-                </div>
-
-                {formData.salary.benefits && formData.salary.benefits.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {formData.salary.benefits.map((benefit, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center space-x-2 px-3 py-2 bg-muted rounded-lg text-sm"
-                      >
-                        <span>{benefit}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeBenefit(index)}
-                          className="text-destructive hover:text-destructive/80"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Application Email */}
+            {/* Status */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Application Email *</label>
+              <label className="text-sm font-medium text-foreground">Status</label>
               <select
-                required
-                value={formData.applicationEmail}
-                onChange={(e) => handleChange('applicationEmail', e.target.value)}
+                value={formData.status}
+                onChange={(e) => handleChange('status', e.target.value)}
                 className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                disabled={isLoadingData}
               >
-                <option value="">
-                  {isLoadingData ? 'Loading email accounts...' : 'Select an email account'}
-                </option>
-                {emailAccounts.map((account) => (
-                  <option key={account.id} value={account.email}>
-                    {account.email} ({account.provider})
-                  </option>
-                ))}
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="closed">Closed</option>
               </select>
               <p className="text-xs text-muted-foreground">
-                {emailAccounts.length === 0 && !isLoadingData ? (
-                  <>No email accounts configured. <a href="/email-config" className="text-primary hover:underline">Configure email accounts</a> first.</>
-                ) : (
-                  'This email will receive all job applications for this position'
-                )}
-              </p>
-            </div>
-
-            {/* Workflow Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Select Workflow Template</label>
-              <select
-                value={formData.workflowId}
-                onChange={(e) => handleChange('workflowId', e.target.value)}
-                className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                disabled={isLoadingData}
-              >
-                <option value="">
-                  {isLoadingData ? 'Loading workflow templates...' : 'Select a workflow template (optional)'}
-                </option>
-                {workflowTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name} - {template.category}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">
-                {workflowTemplates.length === 0 && !isLoadingData ? (
-                  <>No workflow templates available. <a href="/workflows" className="text-primary hover:underline">Create workflow templates</a> first.</>
-                ) : (
-                  'Choose a workflow template to automate the hiring process for this job. You can create custom workflows in the Workflows section.'
-                )}
+                Draft jobs are not visible to candidates. Active jobs can receive applications.
               </p>
             </div>
 
@@ -561,7 +277,7 @@ const JobForm = ({ onSuccess, onCancel }: JobFormProps) => {
                 disabled={isLoading}
                 className="flex-1 bg-gradient-hero hover:bg-gradient-hero/90"
               >
-                {isLoading ? 'Creating...' : 'Create Job Posting'}
+                {isLoading ? (job ? 'Updating...' : 'Creating...') : (job ? 'Update Job' : 'Create Job')}
               </Button>
               
               <Button
