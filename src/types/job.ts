@@ -1,6 +1,7 @@
 // API Response Types that match our backend
 export interface JobResponse {
   id: string
+  short_id: string
   title: string
   description: string
   requirements?: string

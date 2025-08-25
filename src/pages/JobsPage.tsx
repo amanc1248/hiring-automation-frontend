@@ -250,6 +250,9 @@ const JobsPage = () => {
                   <div className="space-y-2">
                     <div className="flex items-center space-x-3">
                       <h3 className="text-xl font-semibold text-foreground">{job.title}</h3>
+                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-mono font-medium bg-blue-100 text-blue-800 border">
+                        {job.short_id}
+                      </span>
                       <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
                         <span>{getStatusIcon(job.status)}</span>
                         <span className="capitalize">{job.status}</span>
