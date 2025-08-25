@@ -3,7 +3,9 @@ import { Button } from '../ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card'
 import { useAuth } from '../../hooks/useAuth'
 import { jobService } from '../../services/jobService'
+import { workflowService } from '../../services/workflowService'
 import type { JobResponse, JobCreateRequest, JobUpdateRequest } from '../../types/job'
+import type { WorkflowTemplate } from '../../types/workflow'
 
 interface JobFormProps {
   job?: JobResponse | null
@@ -14,6 +16,8 @@ interface JobFormProps {
 const JobForm = ({ job, onSuccess, onCancel }: JobFormProps) => {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
+  const [workflowTemplates, setWorkflowTemplates] = useState<WorkflowTemplate[]>([])
+  const [selectedWorkflowTemplate, setSelectedWorkflowTemplate] = useState<WorkflowTemplate | null>(null)
   const [formData, setFormData] = useState<JobCreateRequest>({
     title: '',
     description: '',
@@ -26,8 +30,22 @@ const JobForm = ({ job, onSuccess, onCancel }: JobFormProps) => {
     salary_min: 0,
     salary_max: 0,
     salary_currency: 'USD',
-    status: 'draft'
+    status: 'draft',
+    workflow_template_id: undefined
   })
+
+  // Load workflow templates
+  useEffect(() => {
+    const loadWorkflowTemplates = async () => {
+      try {
+        const templates = await workflowService.getWorkflowTemplates()
+        setWorkflowTemplates(templates)
+      } catch (error) {
+        console.error('Failed to load workflow templates:', error)
+      }
+    }
+    loadWorkflowTemplates()
+  }, [])
 
   // Load job data if editing
   useEffect(() => {
@@ -44,10 +62,17 @@ const JobForm = ({ job, onSuccess, onCancel }: JobFormProps) => {
         salary_min: job.salary_min || 0,
         salary_max: job.salary_max || 0,
         salary_currency: job.salary_currency || 'USD',
-        status: job.status
+        status: job.status,
+        workflow_template_id: job.workflow_template_id
       })
+      
+      // Set selected workflow template if editing
+      if (job.workflow_template_id) {
+        const template = workflowTemplates.find(t => t.id === job.workflow_template_id)
+        setSelectedWorkflowTemplate(template || null)
+      }
     }
-  }, [job])
+  }, [job, workflowTemplates])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,6 +102,12 @@ const JobForm = ({ job, onSuccess, onCancel }: JobFormProps) => {
       ...prev,
       [field]: value
     }))
+  }
+
+  const handleWorkflowTemplateChange = (templateId: string) => {
+    const template = workflowTemplates.find(t => t.id === templateId)
+    setSelectedWorkflowTemplate(template || null)
+    handleChange('workflow_template_id', templateId || undefined)
   }
 
   return (
@@ -268,6 +299,69 @@ const JobForm = ({ job, onSuccess, onCancel }: JobFormProps) => {
               <p className="text-xs text-muted-foreground">
                 Draft jobs are not visible to candidates. Active jobs can receive applications.
               </p>
+            </div>
+
+            {/* Workflow Template */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-foreground">Workflow Template</h3>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Select Workflow Template</label>
+                <select
+                  value={formData.workflow_template_id || ''}
+                  onChange={(e) => handleWorkflowTemplateChange(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                >
+                  <option value="">No workflow template</option>
+                  {workflowTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} ({template.category})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Choose a workflow template to automate the hiring process for this job.
+                </p>
+              </div>
+
+              {/* Selected Workflow Template Details */}
+              {selectedWorkflowTemplate && (
+                <div className="p-4 bg-muted/50 rounded-lg border border-border">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-foreground">{selectedWorkflowTemplate.name}</h4>
+                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 border">
+                        {selectedWorkflowTemplate.category}
+                      </span>
+                    </div>
+                    
+                    {selectedWorkflowTemplate.description && (
+                      <p className="text-sm text-muted-foreground">
+                        {selectedWorkflowTemplate.description}
+                      </p>
+                    )}
+                    
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-foreground">Workflow Steps:</p>
+                      <div className="space-y-1">
+                        {selectedWorkflowTemplate.steps.map((step, index) => (
+                          <div key={step.type} className="flex items-center space-x-2 text-sm">
+                            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs font-medium">
+                              {index + 1}
+                            </span>
+                            <span className="text-foreground">{step.name}</span>
+                            {step.config.requiresApproval && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Approval Required
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Form Actions */}
