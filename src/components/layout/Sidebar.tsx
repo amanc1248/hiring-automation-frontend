@@ -49,6 +49,13 @@ const Sidebar = () => {
         requiredPermissions: [] // Everyone can view candidates
       },
       {
+        name: 'Approvals',
+        icon: '✅',
+        href: '/approvals',
+        isSetupStep: false,
+        requiredPermissions: ['admin', 'hr_manager', 'recruiter'] // Admins, HR managers, and recruiters can approve
+      },
+      {
         name: 'Users',
         icon: '👤',
         href: '/users',

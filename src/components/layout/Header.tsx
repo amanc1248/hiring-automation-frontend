@@ -187,6 +187,18 @@ const Header = () => {
                 <span className="font-medium">Candidates</span>
               </Link>
               
+              {/* Approvals - Admin, HR, and Recruiters only */}
+              {(user?.role === 'admin' || user?.role === 'hr_manager' || user?.role === 'recruiter') && (
+                <Link
+                  to="/approvals"
+                  onClick={() => setShowMobileMenu(false)}
+                  className="flex items-center space-x-3 p-3 rounded-lg text-foreground hover:bg-muted transition-colors"
+                >
+                  <span className="text-lg">✅</span>
+                  <span className="font-medium">Approvals</span>
+                </Link>
+              )}
+              
               {/* Users - Admin only */}
               {user?.role === 'admin' && (
                 <Link

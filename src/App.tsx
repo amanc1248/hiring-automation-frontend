@@ -8,6 +8,7 @@ import JobsPage from './pages/JobsPage'
 import EmailConfigPage from './pages/EmailConfigPage'
 import WorkflowBuilderPage from './pages/WorkflowBuilderPage'
 import CandidatesPage from './pages/CandidatesPage'
+import ApprovalsPage from './pages/ApprovalsPage'
 import UserManagementPage from './pages/UserManagementPage'
 import SettingsPage from './pages/SettingsPage'
 
@@ -87,6 +88,17 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <MainLayout>
               <CandidatesPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/approvals"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <ApprovalsPage />
             </MainLayout>
           </ProtectedRoute>
         }
