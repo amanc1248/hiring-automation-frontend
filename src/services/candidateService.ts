@@ -445,6 +445,17 @@ class CandidateService {
     }
   }
 
+  async getCandidateWorkflow(candidateId: string): Promise<any> {
+    try {
+      const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CANDIDATES}/${candidateId}/workflow`
+      const response = await makeApiCall(url)
+      return response
+    } catch (error) {
+      console.error('Failed to fetch candidate workflow:', error)
+      throw error
+    }
+  }
+
   async createCandidate(candidateData: CandidateCreateData): Promise<Candidate> {
     try {
       // Split name into first and last name for API
@@ -553,6 +564,7 @@ class CandidateService {
       return true
     }
   }
+
 }
 
 export const candidateService = new CandidateService()
