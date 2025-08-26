@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Config Test</title>
+</head>
+<body>
+    <h1>Environment Variable Test</h1>
+    <div id="output"></div>
+    
+    <script type="module">
+        // Test environment variables
+        const output = document.getElementById('output');
+        
+        output.innerHTML = `
+            <h2>Environment Variables:</h2>
+            <p><strong>VITE_API_URL:</strong> ${import.meta.env.VITE_API_URL || 'NOT SET'}</p>
+            <p><strong>MODE:</strong> ${import.meta.env.MODE || 'NOT SET'}</p>
+            <p><strong>PROD:</strong> ${import.meta.env.PROD || 'NOT SET'}</p>
+            <p><strong>DEV:</strong> ${import.meta.env.DEV || 'NOT SET'}</p>
+        `;
+        
+        // Test API call
+        const testApiCall = async () => {
+            try {
+                const baseUrl = import.meta.env.VITE_API_URL || 'https://hr-automation-backend-production-1d70.up.railway.app';
+                const response = await fetch(`${baseUrl}/health`);
+                const data = await response.json();
+                output.innerHTML += `<h3>API Test Result:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                output.innerHTML += `<h3>API Test Error:</h3><pre>${error.message}</pre>`;
+            }
+        };
+        
+        testApiCall();
+    </script>
+</body>
+</html>
+
