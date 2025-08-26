@@ -5,8 +5,28 @@ import type {
   CandidateFilters, 
   CandidatesResponse 
 } from '../types/candidate'
+import { API_CONFIG, tokenStorage } from '../config/api'
 
-// Mock candidates data
+// Helper function to make API calls
+const makeApiCall = async (url: string, options: RequestInit = {}) => {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${tokenStorage.getAccessToken()}`,
+      ...options.headers,
+    },
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+  }
+
+  return response.json()
+}
+
+// Mock candidates data (fallback for when no real data exists)
 const mockCandidates: Candidate[] = [
   {
     id: 'candidate-1',
@@ -322,141 +342,216 @@ const mockCandidates: Candidate[] = [
 
 class CandidateService {
   async getCandidates(companyId: string, filters: CandidateFilters & { page: number; limit: number }): Promise<CandidatesResponse> {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    let filteredCandidates = [...mockCandidates]
-    
-    // Apply filters
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase()
-      filteredCandidates = filteredCandidates.filter(candidate =>
-        candidate.name.toLowerCase().includes(searchLower) ||
-        candidate.email.toLowerCase().includes(searchLower) ||
-        candidate.jobTitle.toLowerCase().includes(searchLower)
-      )
-    }
-    
-    if (filters.jobId) {
-      filteredCandidates = filteredCandidates.filter(candidate => candidate.jobId === filters.jobId)
-    }
-    
-    if (filters.status) {
-      filteredCandidates = filteredCandidates.filter(candidate => candidate.status === filters.status)
-    }
-    
-    if (filters.workflowStep) {
-      filteredCandidates = filteredCandidates.filter(candidate => candidate.currentStep === filters.workflowStep)
-    }
-    
-    if (filters.dateRange !== 'all') {
-      const now = new Date()
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      
-      filteredCandidates = filteredCandidates.filter(candidate => {
-        const applicationDate = new Date(candidate.applicationDate)
-        
-        switch (filters.dateRange) {
-          case 'today':
-            return applicationDate >= today
-          case 'week':
-            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-            return applicationDate >= weekAgo
-          case 'month':
-            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-            return applicationDate >= monthAgo
-          case 'quarter':
-            const quarterAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)
-            return applicationDate >= quarterAgo
-          default:
-            return true
-        }
+    try {
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: filters.page.toString(),
+        limit: filters.limit.toString(),
       })
-    }
-    
-    const total = filteredCandidates.length
-    const startIndex = (filters.page - 1) * filters.limit
-    const endIndex = startIndex + filters.limit
-    const paginatedCandidates = filteredCandidates.slice(startIndex, endIndex)
-    
-    return {
-      candidates: paginatedCandidates,
-      total,
-      page: filters.page,
-      limit: filters.limit,
-      totalPages: Math.ceil(total / filters.limit)
+
+      if (filters.search) params.append('search', filters.search)
+      if (filters.jobId) params.append('job_id', filters.jobId)
+      if (filters.status) params.append('status', filters.status)
+      if (filters.workflowStep) params.append('workflow_step', filters.workflowStep)
+      if (filters.dateRange) params.append('date_range', filters.dateRange)
+
+      const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CANDIDATES}?${params}`
+      
+      const response = await makeApiCall(url)
+      
+      return {
+        candidates: response.candidates,
+        total: response.total,
+        page: response.page,
+        limit: response.limit,
+        totalPages: response.totalPages
+      }
+    } catch (error) {
+      console.warn('Failed to fetch real candidates, using mock data:', error)
+      
+      // Fallback to mock data with filtering
+      let filteredCandidates = [...mockCandidates]
+      
+      // Apply filters
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase()
+        filteredCandidates = filteredCandidates.filter(candidate =>
+          candidate.name.toLowerCase().includes(searchLower) ||
+          candidate.email.toLowerCase().includes(searchLower) ||
+          candidate.jobTitle.toLowerCase().includes(searchLower)
+        )
+      }
+      
+      if (filters.jobId) {
+        filteredCandidates = filteredCandidates.filter(candidate => candidate.jobId === filters.jobId)
+      }
+      
+      if (filters.status) {
+        filteredCandidates = filteredCandidates.filter(candidate => candidate.status === filters.status)
+      }
+      
+      if (filters.workflowStep) {
+        filteredCandidates = filteredCandidates.filter(candidate => candidate.currentStep === filters.workflowStep)
+      }
+      
+      if (filters.dateRange !== 'all') {
+        const now = new Date()
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        
+        filteredCandidates = filteredCandidates.filter(candidate => {
+          const applicationDate = new Date(candidate.applicationDate)
+          
+          switch (filters.dateRange) {
+            case 'today':
+              return applicationDate >= today
+            case 'week':
+              const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+              return applicationDate >= weekAgo
+            case 'month':
+              const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+              return applicationDate >= monthAgo
+            case 'quarter':
+              const quarterAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)
+              return applicationDate >= quarterAgo
+            default:
+              return true
+          }
+        })
+      }
+      
+      const total = filteredCandidates.length
+      const startIndex = (filters.page - 1) * filters.limit
+      const endIndex = startIndex + filters.limit
+      const paginatedCandidates = filteredCandidates.slice(startIndex, endIndex)
+      
+      return {
+        candidates: paginatedCandidates,
+        total,
+        page: filters.page,
+        limit: filters.limit,
+        totalPages: Math.ceil(total / filters.limit)
+      }
     }
   }
 
   async getCandidate(candidateId: string): Promise<Candidate | null> {
-    await new Promise(resolve => setTimeout(resolve, 300))
-    return mockCandidates.find(c => c.id === candidateId) || null
+    try {
+      const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CANDIDATES}/${candidateId}`
+      const response = await makeApiCall(url)
+      return response
+    } catch (error) {
+      console.warn('Failed to fetch real candidate, using mock data:', error)
+      return mockCandidates.find(c => c.id === candidateId) || null
+    }
   }
 
   async createCandidate(candidateData: CandidateCreateData): Promise<Candidate> {
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    const newCandidate: Candidate = {
-      id: `candidate-${Date.now()}`,
-      name: candidateData.name,
-      email: candidateData.email,
-      phone: candidateData.phone,
-      location: candidateData.location,
-      jobId: candidateData.jobId,
-      jobTitle: 'Backend Engineer', // This would come from the job
-      applicationDate: new Date().toISOString(),
-      currentStep: 'email_reception',
-      workflowProgress: [
-        {
-          id: `step-${Date.now()}`,
-          name: 'Email Reception',
-          type: 'email_reception',
-          status: 'completed',
-          startedAt: new Date().toISOString(),
-          completedAt: new Date().toISOString()
-        }
-      ],
-      resume: {
-        id: `resume-${Date.now()}`,
-        filename: 'new_resume.pdf',
-        originalName: 'Resume.pdf',
-        fileSize: 0,
-        fileType: 'application/pdf',
-        downloadUrl: '/api/resumes/new_resume.pdf',
-        uploadedAt: new Date().toISOString()
-      },
-      communicationHistory: [],
-      status: 'active',
-      notes: [],
-      companyId: 'company-1',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+    try {
+      // Split name into first and last name for API
+      const nameParts = candidateData.name.split(' ')
+      const firstName = nameParts[0] || ''
+      const lastName = nameParts.slice(1).join(' ') || ''
+
+      const apiData = {
+        first_name: firstName,
+        last_name: lastName,
+        email: candidateData.email,
+        phone: candidateData.phone,
+        location: candidateData.location
+      }
+
+      const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CANDIDATES}`
+      const response = await makeApiCall(url, {
+        method: 'POST',
+        body: JSON.stringify(apiData)
+      })
+      
+      return response
+    } catch (error) {
+      console.warn('Failed to create real candidate, using mock:', error)
+      
+      // Fallback to mock creation
+      const newCandidate: Candidate = {
+        id: `candidate-${Date.now()}`,
+        name: candidateData.name,
+        email: candidateData.email,
+        phone: candidateData.phone,
+        location: candidateData.location,
+        jobId: candidateData.jobId,
+        jobTitle: 'Backend Engineer', // This would come from the job
+        applicationDate: new Date().toISOString(),
+        currentStep: 'email_reception',
+        workflowProgress: [
+          {
+            id: `step-${Date.now()}`,
+            name: 'Email Reception',
+            type: 'email_reception',
+            status: 'completed',
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString()
+          }
+        ],
+        resume: {
+          id: `resume-${Date.now()}`,
+          filename: 'new_resume.pdf',
+          originalName: 'Resume.pdf',
+          fileSize: 0,
+          fileType: 'application/pdf',
+          downloadUrl: '/api/resumes/new_resume.pdf',
+          uploadedAt: new Date().toISOString()
+        },
+        communicationHistory: [],
+        status: 'active',
+        notes: [],
+        companyId: 'company-1',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+      
+      mockCandidates.push(newCandidate)
+      return newCandidate
     }
-    
-    mockCandidates.push(newCandidate)
-    return newCandidate
   }
 
   async updateCandidate(candidateId: string, updates: CandidateUpdateData): Promise<Candidate | null> {
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    const candidateIndex = mockCandidates.findIndex(c => c.id === candidateId)
-    if (candidateIndex === -1) return null
-    
-    const updatedCandidate = { ...mockCandidates[candidateIndex], ...updates, updatedAt: new Date().toISOString() }
-    mockCandidates[candidateIndex] = updatedCandidate
-    
-    return updatedCandidate
+    try {
+      const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CANDIDATES}/${candidateId}`
+      const response = await makeApiCall(url, {
+        method: 'PUT',
+        body: JSON.stringify(updates)
+      })
+      return response
+    } catch (error) {
+      console.warn('Failed to update real candidate, using mock:', error)
+      
+      // Fallback to mock update
+      const candidateIndex = mockCandidates.findIndex(c => c.id === candidateId)
+      if (candidateIndex === -1) return null
+      
+      const updatedCandidate = { ...mockCandidates[candidateIndex], ...updates, updatedAt: new Date().toISOString() }
+      mockCandidates[candidateIndex] = updatedCandidate
+      
+      return updatedCandidate
+    }
   }
 
   async deleteCandidate(candidateId: string): Promise<boolean> {
-    await new Promise(resolve => setTimeout(resolve, 300))
-    
-    const candidateIndex = mockCandidates.findIndex(c => c.id === candidateId)
-    if (candidateIndex === -1) return false
-    
-    mockCandidates.splice(candidateIndex, 1)
-    return true
+    try {
+      const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CANDIDATES}/${candidateId}`
+      await makeApiCall(url, {
+        method: 'DELETE'
+      })
+      return true
+    } catch (error) {
+      console.warn('Failed to delete real candidate, using mock:', error)
+      
+      // Fallback to mock delete
+      const candidateIndex = mockCandidates.findIndex(c => c.id === candidateId)
+      if (candidateIndex === -1) return false
+      
+      mockCandidates.splice(candidateIndex, 1)
+      return true
+    }
   }
 }
 

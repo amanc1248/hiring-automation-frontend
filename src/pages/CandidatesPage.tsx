@@ -315,7 +315,32 @@ const CandidatesPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredCandidates.map((candidate) => (
+                {filteredCandidates.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center">
+                      <div className="space-y-4">
+                        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
+                          <span className="text-2xl">👥</span>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-foreground">No Candidates Yet</h3>
+                          <p className="text-muted-foreground mt-2">
+                            Candidates will appear here when they apply for jobs through your email automation workflow.
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-2">
+                            Make sure you have:
+                          </p>
+                          <ul className="text-sm text-muted-foreground mt-2 space-y-1">
+                            <li>• Email polling enabled in Email Configuration</li>
+                            <li>• Jobs posted with workflow templates</li>
+                            <li>• Gmail account connected and authorized</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredCandidates.map((candidate) => (
                   <tr 
                     key={candidate.id} 
                     className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors"
@@ -374,7 +399,8 @@ const CandidatesPage = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
