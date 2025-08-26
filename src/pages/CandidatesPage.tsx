@@ -18,6 +18,8 @@ const CandidatesPage = () => {
   const [selectedJob, setSelectedJob] = useState<any>(null)
   const [showJobModal, setShowJobModal] = useState(false)
   const [viewMode, setViewMode] = useState<'table' | 'board'>('table')
+  const [workflowData, setWorkflowData] = useState<any>(null)
+  const [isLoadingWorkflow, setIsLoadingWorkflow] = useState(false)
   
   // Filters state
   const [filters, setFilters] = useState<CandidateFilters>({
@@ -58,9 +60,21 @@ const CandidatesPage = () => {
     setCurrentPage(1) // Reset to first page when filters change
   }
 
-  const handleCandidateClick = (candidate: Candidate) => {
+  const handleCandidateClick = async (candidate: Candidate) => {
     setSelectedCandidate(candidate)
     setShowDetailModal(true)
+    
+    // Fetch workflow data for this candidate
+    setIsLoadingWorkflow(true)
+    try {
+      const workflow = await candidateService.getCandidateWorkflow(candidate.id)
+      setWorkflowData(workflow)
+    } catch (error) {
+      console.error('Failed to fetch workflow data:', error)
+      setWorkflowData(null)
+    } finally {
+      setIsLoadingWorkflow(false)
+    }
   }
 
   const handleJobClick = (jobId: string, jobTitle: string) => {
@@ -315,7 +329,32 @@ const CandidatesPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredCandidates.map((candidate) => (
+                {filteredCandidates.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center">
+                      <div className="space-y-4">
+                        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
+                          <span className="text-2xl">👥</span>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-foreground">No Candidates Yet</h3>
+                          <p className="text-muted-foreground mt-2">
+                            Candidates will appear here when they apply for jobs through your email automation workflow.
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-2">
+                            Make sure you have:
+                          </p>
+                          <ul className="text-sm text-muted-foreground mt-2 space-y-1">
+                            <li>• Email polling enabled in Email Configuration</li>
+                            <li>• Jobs posted with workflow templates</li>
+                            <li>• Gmail account connected and authorized</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredCandidates.map((candidate) => (
                   <tr 
                     key={candidate.id} 
                     className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors"
@@ -374,7 +413,8 @@ const CandidatesPage = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -432,7 +472,11 @@ const CandidatesPage = () => {
                     <CardTitle className="text-xl">{selectedCandidate.name}</CardTitle>
                     <p className="text-muted-foreground">{selectedCandidate.email}</p>
                   </div>
-                  <Button variant="outline" onClick={() => setShowDetailModal(false)}>
+                  <Button variant="outline" onClick={() => {
+                    setShowDetailModal(false)
+                    setWorkflowData(null)
+                    setIsLoadingWorkflow(false)
+                  }}>
                     ✕
                   </Button>
                 </div>
@@ -476,13 +520,13 @@ const CandidatesPage = () => {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Current Step:</span>
                         <span className="text-foreground">
-                          {selectedCandidate.currentStep.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                          {workflowData ? workflowData.current_step : selectedCandidate.currentStep.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Progress:</span>
                         <span className="text-foreground font-medium">
-                          {selectedCandidate.workflowProgress.filter((s: any) => s.status === 'completed').length} of {selectedCandidate.workflowProgress.length} steps completed
+                          {workflowData ? `${workflowData.progress.completed} of ${workflowData.progress.total} steps completed` : `${selectedCandidate.workflowProgress.filter((s: any) => s.status === 'completed').length} of ${selectedCandidate.workflowProgress.length} steps completed`}
                         </span>
                       </div>
                     </div>
@@ -492,72 +536,144 @@ const CandidatesPage = () => {
                 {/* Workflow Progress */}
                 <div className="border-t border-border pt-6">
                   <h3 className="text-lg font-semibold text-foreground mb-4">Hiring Workflow Progress</h3>
+                  
+                  {/* Progress Bar */}
+                  {workflowData && workflowData.has_workflow && (
+                    <div className="mb-6">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-foreground">Overall Progress</span>
+                        <span className="text-sm text-muted-foreground">
+                          {workflowData.progress.completed} of {workflowData.progress.total} steps
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${workflowData.progress.percentage}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-center mt-2">
+                        <span className="text-sm font-semibold text-green-600">
+                          {workflowData.progress.percentage}% Complete
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="space-y-4">
-                    {/* Workflow Steps */}
-                    {selectedCandidate.workflowProgress.map((step: any, index: number) => (
-                      <div key={step.id} className="relative">
-                        {/* Step Line */}
-                        {index < selectedCandidate.workflowProgress.length - 1 && (
-                          <div className={`absolute left-5 top-8 w-0.5 h-8 ${
-                            step.status === 'completed' ? 'bg-green-200' : 'bg-gray-200'
-                          }`}></div>
-                        )}
-                        
-                        {/* Step Content */}
-                        <div className="flex items-start space-x-4">
-                          {/* Step Icon */}
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
-                            step.status === 'completed' ? 'bg-green-500' :
-                            step.status === 'in_progress' ? 'bg-blue-500' :
-                            step.status === 'waiting_approval' ? 'bg-yellow-500' :
-                            step.status === 'failed' ? 'bg-red-500' :
-                            'bg-gray-400'
-                          }`}>
-                            {step.status === 'completed' ? '✓' :
-                             step.status === 'in_progress' ? '⏳' :
-                             step.status === 'waiting_approval' ? '👤' :
-                             step.status === 'failed' ? '❌' :
-                             '○'}
-                          </div>
+                    {isLoadingWorkflow ? (
+                      <div className="text-center py-4">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                        <p className="text-muted-foreground mt-2">Loading workflow...</p>
+                      </div>
+                    ) : workflowData && workflowData.has_workflow ? (
+                      /* Real Workflow Steps */
+                      workflowData.steps.map((step: any, index: number) => (
+                        <div key={step.step} className="relative">
+                          {/* Step Line */}
+                          {index < workflowData.steps.length - 1 && (
+                            <div className={`absolute left-5 top-8 w-0.5 h-8 ${
+                              step.completed ? 'bg-green-200' : 'bg-gray-200'
+                            }`}></div>
+                          )}
                           
-                          {/* Step Details */}
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-medium text-foreground">{step.name}</h4>
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                step.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                step.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                                step.status === 'waiting_approval' ? 'bg-yellow-100 text-yellow-800' :
-                                step.status === 'failed' ? 'bg-red-100 text-red-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {step.status.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                              </span>
+                          {/* Step Content */}
+                          <div className="flex items-start space-x-4">
+                            {/* Step Icon */}
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
+                              step.completed ? 'bg-green-500' : 'bg-gray-400'
+                            }`}>
+                              {step.completed ? '✓' : '○'}
                             </div>
                             
-                            {/* Step Metadata */}
-                            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                              {step.startedAt && (
-                                <span>Started: {new Date(step.startedAt).toLocaleString()}</span>
-                              )}
-                              {step.completedAt && (
-                                <span>Completed: {new Date(step.completedAt).toLocaleString()}</span>
-                              )}
-                              {step.status === 'waiting_approval' && (
-                                <span className="text-yellow-600 font-medium">⏳ Waiting for human approval</span>
-                              )}
-                            </div>
-                            
-                            {/* Step Notes */}
-                            {step.notes && (
-                              <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
-                                <span className="font-medium">Notes:</span> {step.notes}
+                            {/* Step Details */}
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-medium text-foreground">{step.name}</h4>
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  step.completed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {step.status.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                                </span>
                               </div>
-                            )}
+                            </div>
                           </div>
                         </div>
+                      ))
+                    ) : workflowData && !workflowData.has_workflow ? (
+                      /* No workflow message */
+                      <div className="text-center py-8">
+                        <div className="text-muted-foreground mb-2">📋</div>
+                        <p className="text-muted-foreground">No workflow has been started for this candidate yet.</p>
+                        <p className="text-sm text-muted-foreground mt-1">Workflow will begin automatically when the first email is received.</p>
                       </div>
-                    ))}
+                    ) : (
+                      /* Fallback to mock data */
+                      selectedCandidate.workflowProgress.map((step: any, index: number) => (
+                        <div key={step.id} className="relative">
+                          {/* Step Line */}
+                          {index < selectedCandidate.workflowProgress.length - 1 && (
+                            <div className={`absolute left-5 top-8 w-0.5 h-8 ${
+                              step.status === 'completed' ? 'bg-green-200' : 'bg-gray-200'
+                            }`}></div>
+                          )}
+                          
+                          {/* Step Content */}
+                          <div className="flex items-start space-x-4">
+                            {/* Step Icon */}
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
+                              step.status === 'completed' ? 'bg-green-500' :
+                              step.status === 'in_progress' ? 'bg-blue-500' :
+                              step.status === 'waiting_approval' ? 'bg-yellow-500' :
+                              step.status === 'failed' ? 'bg-red-500' :
+                              'bg-gray-400'
+                            }`}>
+                              {step.status === 'completed' ? '✓' :
+                               step.status === 'in_progress' ? '⏳' :
+                               step.status === 'waiting_approval' ? '👤' :
+                               step.status === 'failed' ? '❌' :
+                               '○'}
+                            </div>
+                            
+                            {/* Step Details */}
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-medium text-foreground">{step.name}</h4>
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  step.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                  step.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                                  step.status === 'waiting_approval' ? 'bg-yellow-100 text-yellow-800' :
+                                  step.status === 'failed' ? 'bg-red-100 text-red-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {step.status.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                                </span>
+                              </div>
+                              
+                              {/* Step Metadata */}
+                              <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                                {step.startedAt && (
+                                  <span>Started: {new Date(step.startedAt).toLocaleString()}</span>
+                                )}
+                                {step.completedAt && (
+                                  <span>Completed: {new Date(step.completedAt).toLocaleString()}</span>
+                                )}
+                                {step.status === 'waiting_approval' && (
+                                  <span className="text-yellow-600 font-medium">⏳ Waiting for human approval</span>
+                                )}
+                              </div>
+                              
+                              {/* Step Notes */}
+                              {step.notes && (
+                                <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
+                                  <span className="font-medium">Notes:</span> {step.notes}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
