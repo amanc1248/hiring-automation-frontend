@@ -4,6 +4,9 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "vite",
+  "env": {
+    "VITE_API_URL": "https://hr-automation-backend-production-1d70.up.railway.app"
+  },
   "rewrites": [
     {
       "source": "/((?!api/).*)",
