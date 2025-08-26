@@ -1,7 +1,10 @@
 import { API_CONFIG, tokenStorage, type ApiResponse, type ApiError } from '../config/api'
+import { authService } from './authService'
 
 class ApiClient {
   private baseURL: string
+  private isRefreshing = false
+  private failedQueue: Array<{ resolve: Function; reject: Function }> = []
 
   constructor() {
     this.baseURL = API_CONFIG.BASE_URL
@@ -12,6 +15,11 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseURL}${endpoint}`
+    
+    // Proactively refresh token if it's expiring soon (but not for refresh endpoint)
+    if (!endpoint.includes('/auth/refresh')) {
+      await authService.refreshTokenIfNeeded()
+    }
     
     // Default headers
     const headers: Record<string, string> = {
@@ -44,9 +52,21 @@ class ApiClient {
       if (!response.ok) {
         // Handle 401 Unauthorized - token might be expired
         if (response.status === 401) {
-          tokenStorage.clearTokens()
-          // Redirect to login or trigger re-authentication
-          window.location.href = '/auth'
+          // Try to refresh the token
+          const refreshResult = await this.handleTokenRefresh()
+          
+          if (refreshResult) {
+            // Retry the original request with new token
+            return this.request<T>(endpoint, options)
+          } else {
+            // Refresh failed, redirect to login
+            tokenStorage.clearTokens()
+            window.location.href = '/auth'
+            return {
+              success: false,
+              error: 'Authentication failed'
+            }
+          }
         }
 
         const error: ApiError = {
@@ -101,6 +121,43 @@ class ApiClient {
 
   async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { method: 'DELETE' })
+  }
+
+  // Handle token refresh
+  private async handleTokenRefresh(): Promise<boolean> {
+    // Prevent multiple simultaneous refresh attempts
+    if (this.isRefreshing) {
+      // Wait for the current refresh to complete
+      return new Promise((resolve) => {
+        this.failedQueue.push({ resolve, reject: () => resolve(false) })
+      })
+    }
+
+    this.isRefreshing = true
+
+    try {
+      const refreshResult = await authService.refreshToken()
+      
+      if (refreshResult.success) {
+        // Resolve all queued requests
+        this.failedQueue.forEach(({ resolve }) => resolve(true))
+        this.failedQueue = []
+        return true
+      } else {
+        // Resolve all queued requests with failure
+        this.failedQueue.forEach(({ resolve }) => resolve(false))
+        this.failedQueue = []
+        return false
+      }
+    } catch (error) {
+      console.error('Token refresh failed:', error)
+      // Resolve all queued requests with failure
+      this.failedQueue.forEach(({ resolve }) => resolve(false))
+      this.failedQueue = []
+      return false
+    } finally {
+      this.isRefreshing = false
+    }
   }
 
   // File upload method

@@ -65,6 +65,9 @@ const transformCompany = (backendCompany: BackendCompany): Company => ({
   createdAt: backendCompany.created_at
 })
 
+// Flag to prevent recursive refresh calls
+let isRefreshing = false
+
 export const authService = {
   async login(credentials: LoginCredentials): Promise<{ success: boolean; user?: User; company?: Company; error?: string }> {
     const response = await apiClient.post<LoginResponse>(API_CONFIG.ENDPOINTS.LOGIN, credentials)
@@ -175,6 +178,14 @@ export const authService = {
   },
 
   async refreshToken(): Promise<{ success: boolean; error?: string }> {
+    // Prevent recursive refresh calls
+    if (isRefreshing) {
+      return {
+        success: false,
+        error: 'Token refresh already in progress'
+      }
+    }
+
     const refreshToken = tokenStorage.getRefreshToken()
     
     if (!refreshToken) {
@@ -184,24 +195,40 @@ export const authService = {
       }
     }
 
-    const response = await apiClient.post<{ access_token: string; refresh_token: string }>(
-      API_CONFIG.ENDPOINTS.REFRESH,
-      { refresh_token: refreshToken }
-    )
-    
-    if (!response.success || !response.data) {
+    isRefreshing = true
+
+    try {
+      // Make direct fetch call to avoid circular dependency with apiClient
+      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.REFRESH}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      
+      if (data.access_token && data.refresh_token) {
+        // Update tokens
+        tokenStorage.setTokens(data.access_token, data.refresh_token)
+        return { success: true }
+      } else {
+        throw new Error('Invalid response format')
+      }
+    } catch (error) {
+      console.error('Token refresh failed:', error)
       tokenStorage.clearTokens()
       return {
         success: false,
-        error: response.error || 'Token refresh failed'
+        error: error instanceof Error ? error.message : 'Token refresh failed'
       }
-    }
-
-    // Update tokens
-    tokenStorage.setTokens(response.data.access_token, response.data.refresh_token)
-    
-    return {
-      success: true
+    } finally {
+      isRefreshing = false
     }
   },
 
@@ -211,5 +238,34 @@ export const authService = {
 
   isAuthenticated(): boolean {
     return !!tokenStorage.getAccessToken()
+  },
+
+  // Check if access token is about to expire (within 5 minutes)
+  isTokenExpiringSoon(): boolean {
+    const accessToken = tokenStorage.getAccessToken()
+    if (!accessToken) return false
+
+    try {
+      // Decode JWT to check expiration
+      const payload = JSON.parse(atob(accessToken.split('.')[1]))
+      const expTime = payload.exp * 1000 // Convert to milliseconds
+      const currentTime = Date.now()
+      const fiveMinutes = 5 * 60 * 1000 // 5 minutes in milliseconds
+      
+      return (expTime - currentTime) < fiveMinutes
+    } catch (error) {
+      console.error('Error checking token expiration:', error)
+      return false
+    }
+  },
+
+  // Proactively refresh token if it's expiring soon
+  async refreshTokenIfNeeded(): Promise<boolean> {
+    if (this.isTokenExpiringSoon()) {
+      console.log('🔄 Token expiring soon, refreshing...')
+      const result = await this.refreshToken()
+      return result.success
+    }
+    return true
   }
 }

@@ -22,7 +22,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const checkAuth = async () => {
       if (authService.isAuthenticated()) {
+        // Try to get current user
         const result = await authService.getCurrentUser()
+        
         if (result.success && result.user && result.company) {
           setAuthState({
             user: result.user,
@@ -31,9 +33,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             isLoading: false
           })
         } else {
-          // Token might be invalid, clear it
-          authService.logout()
-          setAuthState(prev => ({ ...prev, isLoading: false }))
+          // Token might be expired, try to refresh
+          const refreshResult = await authService.refreshToken()
+          
+          if (refreshResult.success) {
+            // Retry getting current user with new token
+            const retryResult = await authService.getCurrentUser()
+            
+            if (retryResult.success && retryResult.user && retryResult.company) {
+              setAuthState({
+                user: retryResult.user,
+                company: retryResult.company,
+                isAuthenticated: true,
+                isLoading: false
+              })
+            } else {
+              // Refresh failed, clear tokens
+              authService.logout()
+              setAuthState(prev => ({ ...prev, isLoading: false }))
+            }
+          } else {
+            // Refresh failed, clear tokens
+            authService.logout()
+            setAuthState(prev => ({ ...prev, isLoading: false }))
+          }
         }
       } else {
         setAuthState(prev => ({ ...prev, isLoading: false }))
@@ -41,6 +64,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     checkAuth()
+    
+    // Set up periodic token refresh (every 30 minutes)
+    const refreshInterval = setInterval(async () => {
+      if (authService.isAuthenticated()) {
+        await authService.refreshTokenIfNeeded()
+      }
+    }, 30 * 60 * 1000) // 30 minutes
+    
+    // Cleanup interval on unmount
+    return () => clearInterval(refreshInterval)
   }, [])
 
   const login = async (credentials: LoginCredentials): Promise<{ success: boolean; error?: string }> => {
