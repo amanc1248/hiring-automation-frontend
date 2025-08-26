@@ -110,16 +110,6 @@ const Header = () => {
 
             {/* Mobile Navigation */}
             <nav className="flex-1 p-4 space-y-2">
-              {/* Dashboard - Everyone can see */}
-              <Link
-                to="/"
-                onClick={() => setShowMobileMenu(false)}
-                className="flex items-center space-x-3 p-3 rounded-lg text-foreground hover:bg-muted transition-colors"
-              >
-                <span className="text-lg">📊</span>
-                <span className="font-medium">Dashboard</span>
-              </Link>
-              
               {/* Email Config - Admin and HR only */}
               {(user?.role === 'admin' || user?.role === 'hr_manager') && (
                 <Link

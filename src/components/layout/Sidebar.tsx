@@ -10,13 +10,7 @@ const Sidebar = () => {
   // Role-based navigation permissions
   const getNavigationItems = () => {
     const allItems = [
-      {
-        name: 'Dashboard',
-        icon: '📊',
-        href: '/',
-        isSetupStep: false,
-        requiredPermissions: [] // Everyone can see dashboard
-      },
+
       {
         name: 'Email Config',
         icon: '📧',

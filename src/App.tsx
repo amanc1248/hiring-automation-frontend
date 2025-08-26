@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import AuthPage from './pages/AuthPage'
 import MainLayout from './components/layout/MainLayout'
-import Dashboard from './components/dashboard/Dashboard'
+
 import JobsPage from './pages/JobsPage'
 import EmailConfigPage from './pages/EmailConfigPage'
 import WorkflowBuilderPage from './pages/WorkflowBuilderPage'
@@ -40,17 +40,11 @@ const AppRoutes = () => {
     <Routes>
       <Route 
         path="/auth" 
-        element={isAuthenticated ? <Navigate to="/" replace /> : <AuthPage />} 
+        element={isAuthenticated ? <Navigate to="/email-config" replace /> : <AuthPage />} 
       />
       <Route
         path="/"
-        element={
-          <ProtectedRoute>
-            <MainLayout>
-              <Dashboard />
-            </MainLayout>
-          </ProtectedRoute>
-        }
+        element={<Navigate to="/email-config" replace />}
       />
       <Route
         path="/jobs"
@@ -125,7 +119,7 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/email-config" replace />} />
     </Routes>
   )
 }
