@@ -62,13 +62,7 @@ const Sidebar = () => {
         isSetupStep: false,
         requiredPermissions: ['admin'] // Only admin can manage users
       },
-      {
-        name: 'Settings',
-        icon: '⚙️',
-        href: '/settings',
-        isSetupStep: false,
-        requiredPermissions: [] // Everyone can access basic settings
-      }
+
     ]
     
     // Filter items based on user role

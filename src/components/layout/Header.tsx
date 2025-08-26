@@ -37,28 +37,7 @@ const Header = () => {
 
         {/* Right Section - Actions & Profile */}
         <div className="flex items-center space-x-2 lg:space-x-3">
-          {/* Quick Actions */}
-          <Button variant="outline" size="sm" className="hidden md:flex">
-            <span className="mr-2">➕</span>
-            New Job
-          </Button>
 
-          {/* Notifications */}
-          <div className="relative">
-            <Button variant="ghost" size="sm" className="relative">
-              <span className="text-lg">🔔</span>
-              {/* Notification Badge */}
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs font-bold">
-                3
-              </div>
-            </Button>
-          </div>
-
-          {/* AI Status Indicator */}
-          <div className="hidden md:flex items-center space-x-2 bg-success/10 text-success px-3 py-1.5 rounded-lg">
-            <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
-            <span className="text-sm font-medium">AI Active</span>
-          </div>
 
 
 
@@ -210,16 +189,7 @@ const Header = () => {
                   <span className="font-medium">Users</span>
                 </Link>
               )}
-              
-              {/* Settings - Everyone can see (basic settings) */}
-              <Link
-                to="/settings"
-                onClick={() => setShowMobileMenu(false)}
-                className="flex items-center space-x-3 p-3 rounded-lg text-foreground hover:bg-muted transition-colors"
-              >
-                <span className="text-lg">⚙️</span>
-                <span className="font-medium">Settings</span>
-              </Link>
+
             </nav>
 
             {/* Mobile User Info */}

@@ -5,13 +5,13 @@ import { useAuth } from '../hooks/useAuth'
 import { workflowService } from '../services/workflowService'
 import { workflowApiService, type WorkflowStep as ApiWorkflowStep } from '../services/workflowApiService'
 import { userApiService } from '../services/userApiService'
-import type { WorkflowStep, WorkflowTemplate, WorkflowStats } from '../types/workflow'
+import type { WorkflowStep, WorkflowTemplate } from '../types/workflow'
 import type { User } from '../types/user'
 
 const WorkflowBuilderPage = () => {
   const { company } = useAuth()
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([])
-  const [stats, setStats] = useState<WorkflowStats | null>(null)
+
   const [users, setUsers] = useState<User[]>([])
   const [availableSteps, setAvailableSteps] = useState<ApiWorkflowStep[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -69,14 +69,12 @@ const WorkflowBuilderPage = () => {
     if (!company) return
     setIsLoading(true)
     try {
-      const [templatesData, statsData, usersData, availableStepsData] = await Promise.all([
+      const [templatesData, usersData, availableStepsData] = await Promise.all([
         workflowService.getWorkflowTemplates(),
-        workflowService.getWorkflowStats(company.id),
         userApiService.getUsers({ limit: 100, status_filter: 'active' }),
         workflowApiService.getWorkflowSteps()
       ])
       setTemplates(templatesData)
-      setStats(statsData)
       console.log('Users data received:', usersData)
       setUsers(usersData.users)
       setAvailableSteps(availableStepsData)
@@ -377,66 +375,7 @@ const WorkflowBuilderPage = () => {
         </div>
       </div>
 
-      {/* Workflow Stats */}
-      {stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <span className="text-primary text-lg">⚡</span>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.totalWorkflows}</p>
-                  <p className="text-sm text-muted-foreground">Total Workflows</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-success/10 rounded-lg flex items-center justify-center">
-                  <span className="text-success text-lg">✅</span>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.activeWorkflows}</p>
-                  <p className="text-sm text-muted-foreground">Active</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-warning/10 rounded-lg flex items-center justify-center">
-                  <span className="text-warning text-lg">🔄</span>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.runningExecutions}</p>
-                  <p className="text-sm text-muted-foreground">Running</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <span className="text-primary text-lg">📊</span>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.approvalRate}%</p>
-                  <p className="text-sm text-muted-foreground">Approval Rate</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* Workflow Templates */}
       <div className="space-y-4">
