@@ -5,12 +5,12 @@ import { useAuth } from '../hooks/useAuth'
 import { emailService } from '../services/emailService'
 import { gmailApiService } from '../services/gmailApiService'
 import { API_CONFIG, tokenStorage } from '../config/api'
-import type { EmailAccount, EmailStats } from '../types/email'
+import type { EmailAccount } from '../types/email'
 
 const EmailConfigPage = () => {
   const { company } = useAuth()
   const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([])
-  const [emailStats, setEmailStats] = useState<EmailStats | null>(null)
+
   const [isLoading, setIsLoading] = useState(true)
   const [showConnectForm, setShowConnectForm] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
@@ -72,12 +72,8 @@ const EmailConfigPage = () => {
     if (!company) return
     setIsLoading(true)
     try {
-      const [accounts, stats] = await Promise.all([
-        emailService.getEmailAccounts(company.id),
-        emailService.getEmailStats(company.id)
-      ])
+      const accounts = await emailService.getEmailAccounts(company.id)
       setEmailAccounts(accounts)
-      setEmailStats(stats)
     } catch (error) {
       console.error('Failed to load email data:', error)
     } finally {
@@ -377,66 +373,7 @@ const EmailConfigPage = () => {
         </CardContent>
       </Card>
 
-      {/* Email Stats */}
-      {emailStats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <span className="text-primary text-lg">📧</span>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{emailStats.totalEmails}</p>
-                  <p className="text-sm text-muted-foreground">Total Emails</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-success/10 rounded-lg flex items-center justify-center">
-                  <span className="text-success text-lg">✅</span>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{emailStats.processedEmails}</p>
-                  <p className="text-sm text-muted-foreground">Processed</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-warning/10 rounded-lg flex items-center justify-center">
-                  <span className="text-warning text-lg">⏳</span>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{emailStats.pendingEmails}</p>
-                  <p className="text-sm text-muted-foreground">Pending</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <span className="text-primary text-lg">⚡</span>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{emailStats.averageProcessingTime}s</p>
-                  <p className="text-sm text-muted-foreground">Avg Processing</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* Email Accounts */}
       <div className="space-y-4">
