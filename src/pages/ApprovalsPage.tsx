@@ -290,6 +290,7 @@ const ApprovalsPage = () => {
                 </div>
               </CardContent>
             </Card>
+          </div>
         </div>
       )}
 
