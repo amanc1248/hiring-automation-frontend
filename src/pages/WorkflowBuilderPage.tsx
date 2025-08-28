@@ -515,8 +515,7 @@ const WorkflowBuilderPage = () => {
                             ...prev, 
                             type: e.target.value as any,
                             name: selectedStep?.name || prev.name,
-                            display_name: selectedStep?.display_name || prev.display_name,
-                            description: selectedStep?.description || prev.description
+                            display_name: selectedStep?.display_name || (e.target.value === 'custom' ? 'Custom Action' : prev.display_name)
                           }))
                         }}
                         className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
@@ -537,9 +536,9 @@ const WorkflowBuilderPage = () => {
                       <input
                         type="text"
                         value={newStep.display_name}
-                        onChange={(e) => setNewStep(prev => ({ ...prev, display_name: e.target.value }))}
-                        className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                        placeholder="Human-readable description for UI (e.g., 'Analyze candidate resume')"
+                        readOnly
+                        className="w-full px-3 py-2 bg-muted border border-input rounded-lg text-sm text-muted-foreground cursor-not-allowed"
+                        placeholder="Auto-populated based on step type"
                       />
                     </div>
 
