@@ -3,7 +3,8 @@ import { apiClient } from './apiClient';
 export interface WorkflowStep {
   id: string;
   name: string;
-  description?: string;
+  display_name?: string;  // Human-readable description for UI
+  description?: string;    // Full AI prompt for execution
   step_type: 'automated' | 'manual' | 'approval';
   actions: Array<Record<string, any>>;
   created_at: string;

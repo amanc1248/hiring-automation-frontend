@@ -2,7 +2,8 @@ export interface WorkflowStep {
   id: string
   jobId: string
   name: string
-  description: string
+  display_name?: string  // Human-readable description for UI
+  description: string    // Full AI prompt for execution
   type: 'resume_analysis' | 'human_approval' | 'task_assignment' | 'task_review' | 'interview_scheduling' | 'ai_interview' | 'offer_letter' | 'custom'
   order: number
   isActive: boolean
@@ -146,7 +147,8 @@ export interface WorkflowCreateData {
 
 export interface WorkflowStepCreateData {
   name: string
-  description: string
+  display_name?: string  // Human-readable description for UI
+  description: string    // Full AI prompt for execution
   type: WorkflowStep['type']
   order: number
   config: WorkflowStep['config']

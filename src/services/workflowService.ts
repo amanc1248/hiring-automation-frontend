@@ -388,6 +388,7 @@ export const workflowService = {
         isDefault: false,
         steps: template.step_details.map(stepDetail => ({
           name: stepDetail.workflow_step.name,
+          display_name: stepDetail.workflow_step.display_name,  // ✅ Add display_name field
           description: stepDetail.workflow_step.description,
           type: stepDetail.workflow_step.id,
           order: stepDetail.order_number,

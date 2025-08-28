@@ -20,15 +20,15 @@ const WorkflowBuilderPage = () => {
   const [showEditStep, setShowEditStep] = useState(false)
   const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null)
 
-  // Step type descriptions (hardcoded)
+  // Step type descriptions - these will be replaced by display_name from backend
   const stepTypeDescriptions = {
-    resume_analysis: 'AI analyzes resume against job requirements',
-    human_approval: 'Human reviewer approves or rejects candidate',
-    task_assignment: 'Send technical assessment to candidate',
-    task_review: 'Review completed technical assessment',
-    interview_scheduling: 'Schedule interview automatically',
-    ai_interview: 'Conduct AI-powered technical interview',
-    offer_letter: 'Send offer letter to approved candidate',
+    resume_analysis: 'Analyze candidate resume and calculate job fit score',
+    human_approval: 'Require human approval before proceeding to next step',
+    task_assignment: 'Generate and send technical assessment to candidate',
+    task_review: 'Review technical assignment submission and provide feedback',
+    interview_scheduling: 'Schedule candidate interview with team members',
+    ai_interview: 'Conduct AI-powered technical interview with candidate',
+    offer_letter: 'Generate and send job offer letter to candidate',
     custom: 'Custom workflow step'
   }
 
@@ -38,7 +38,8 @@ const WorkflowBuilderPage = () => {
     description: '',
     steps: [] as Array<{
       name: string
-      description: string
+      display_name?: string  // Human-readable description for UI
+      description: string    // Full AI prompt for execution
       type: 'resume_analysis' | 'human_approval' | 'task_assignment' | 'task_review' | 'interview_scheduling' | 'ai_interview' | 'offer_letter' | 'custom'
       delayHours: number
       requiresApproval: boolean
@@ -50,6 +51,7 @@ const WorkflowBuilderPage = () => {
 
   const [newStep, setNewStep] = useState({
     name: '',
+    display_name: '',
     description: '',
     type: 'resume_analysis' as 'resume_analysis' | 'human_approval' | 'task_assignment' | 'task_review' | 'interview_scheduling' | 'ai_interview' | 'offer_letter' | 'custom',
     delayHours: 0,
@@ -172,6 +174,7 @@ const WorkflowBuilderPage = () => {
 
     setNewStep({
       name: '',
+      display_name: '',
       description: '',
       type: 'resume_analysis',
       delayHours: 0,
@@ -193,6 +196,7 @@ const WorkflowBuilderPage = () => {
     const step = customWorkflow.steps[index]
     setNewStep({
       name: step.name,
+      display_name: step.display_name || '',
       description: step.description,
       type: step.type,
       delayHours: step.delayHours,
@@ -223,6 +227,7 @@ const WorkflowBuilderPage = () => {
     // Reset form
     setNewStep({
       name: '',
+      display_name: '',
       description: '',
       type: 'resume_analysis',
       delayHours: 0,
@@ -238,6 +243,7 @@ const WorkflowBuilderPage = () => {
   const handleCancelEdit = () => {
     setNewStep({
       name: '',
+      display_name: '',
       description: '',
       type: 'resume_analysis',
       delayHours: 0,
@@ -263,6 +269,7 @@ const WorkflowBuilderPage = () => {
       description: template.description,
       steps: template.steps.map(step => ({
         name: step.name,
+        display_name: step.display_name || '',
         description: step.description,
         type: step.type,
         delayHours: step.config.delayBeforeExecution || 0,
@@ -517,6 +524,7 @@ const WorkflowBuilderPage = () => {
                             ...prev, 
                             type: e.target.value as any,
                             name: selectedStep?.name || prev.name,
+                            display_name: selectedStep?.display_name || prev.display_name,
                             description: selectedStep?.description || prev.description
                           }))
                         }}
@@ -531,6 +539,17 @@ const WorkflowBuilderPage = () => {
                         ))}
                         <option value="custom">⚙️ Custom Action</option>
                       </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Display Name</label>
+                      <input
+                        type="text"
+                        value={newStep.display_name}
+                        onChange={(e) => setNewStep(prev => ({ ...prev, display_name: e.target.value }))}
+                        className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
+                        placeholder="Human-readable description for UI (e.g., 'Analyze candidate resume')"
+                      />
                     </div>
 
                     <div className="space-y-2">
@@ -665,7 +684,7 @@ const WorkflowBuilderPage = () => {
                                 <span>{step.name}</span>
                               </span>
                               <div className="text-sm text-muted-foreground">
-                                {step.description}
+                                {step.display_name || step.description}
                               </div>
                               <div className="flex items-center space-x-2 text-xs">
                                 {step.delayHours > 0 && (
