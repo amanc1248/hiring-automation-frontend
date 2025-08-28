@@ -15,6 +15,9 @@ export interface ApprovalRequest {
   responded_at?: string
   comments?: string
   
+  // User permissions
+  can_approve: boolean
+  
   // Workflow step information
   step_name: string
   step_description: string

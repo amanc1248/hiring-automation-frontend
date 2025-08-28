@@ -3,8 +3,10 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { approvalApiService } from '../services/approvalApiService'
 import type { ApprovalRequest, ApprovalStats } from '../services/approvalApiService'
+import { useAuth } from '../hooks/useAuth'
 
 const ApprovalsPage = () => {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending')
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([])
   const [approvalHistory, setApprovalHistory] = useState<ApprovalRequest[]>([])
@@ -162,22 +164,33 @@ const ApprovalsPage = () => {
           )}
 
           {showActions && approval.status === 'pending' && (
-            <div className="flex gap-2 pt-3 border-t">
-              <Button
-                onClick={() => handleApprovalAction(approval, 'approved')}
-                disabled={isSubmitting === approval.id}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                ✅ Approve
-              </Button>
-              <Button
-                onClick={() => handleApprovalAction(approval, 'rejected')}
-                disabled={isSubmitting === approval.id}
-                variant="outline"
-                className="border-red-300 text-red-600 hover:bg-red-50"
-              >
-                ❌ Reject
-              </Button>
+            <div className="pt-3 border-t">
+              {approval.can_approve ? (
+                // User can approve - show action buttons
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleApprovalAction(approval, 'approved')}
+                    disabled={isSubmitting === approval.id}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    ✅ Approve
+                  </Button>
+                  <Button
+                    onClick={() => handleApprovalAction(approval, 'rejected')}
+                    disabled={isSubmitting === approval.id}
+                    variant="outline"
+                    className="border-red-300 text-red-600 hover:bg-red-50"
+                  >
+                    ❌ Reject
+                  </Button>
+                </div>
+              ) : (
+                // User can only view - show view-only status
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="text-blue-600">👁️ View Only</span>
+                  <span>• You can view this approval but cannot take action</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -205,7 +218,10 @@ const ApprovalsPage = () => {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Approvals</h1>
           <p className="text-muted-foreground">
-            Manage workflow step approvals and review requests
+            {user?.role === 'admin' 
+              ? 'View all workflow approvals across the company (Admin access)'
+              : 'Manage workflow step approvals and review requests'
+            }
           </p>
         </div>
         <Button onClick={loadApprovalData} variant="outline">
@@ -215,51 +231,65 @@ const ApprovalsPage = () => {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-2">
-                <span className="text-2xl">⏳</span>
+        <div className="space-y-4">
+          {/* Admin indicator */}
+          {user?.role === 'admin' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center space-x-2 text-blue-800">
+                <span className="text-lg">👑</span>
                 <div>
-                  <p className="text-2xl font-bold text-yellow-600">{stats.pending_count}</p>
-                  <p className="text-sm text-muted-foreground">Pending</p>
+                  <p className="font-medium">Admin View</p>
+                  <p className="text-sm">You can see all pending approvals across the company</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-2">
-                <span className="text-2xl">✅</span>
-                <div>
-                  <p className="text-2xl font-bold text-green-600">{stats.approved_count}</p>
-                  <p className="text-sm text-muted-foreground">Approved</p>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">⏳</span>
+                  <div>
+                    <p className="text-2xl font-bold text-yellow-600">{stats.pending_count}</p>
+                    <p className="text-sm text-muted-foreground">Pending</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-2">
-                <span className="text-2xl">❌</span>
-                <div>
-                  <p className="text-2xl font-bold text-red-600">{stats.rejected_count}</p>
-                  <p className="text-sm text-muted-foreground">Rejected</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">✅</span>
+                  <div>
+                    <p className="text-2xl font-bold text-green-600">{stats.approved_count}</p>
+                    <p className="text-sm text-muted-foreground">Approved</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-2">
-                <span className="text-2xl">📊</span>
-                <div>
-                  <p className="text-2xl font-bold text-blue-600">{stats.total_count}</p>
-                  <p className="text-sm text-muted-foreground">Total</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">❌</span>
+                  <div>
+                    <p className="text-2xl font-bold text-red-600">{stats.rejected_count}</p>
+                    <p className="text-sm text-muted-foreground">Rejected</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">📊</span>
+                  <div>
+                    <p className="text-2xl font-bold text-blue-600">{stats.total_count}</p>
+                    <p className="text-sm text-muted-foreground">Total</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
         </div>
       )}
 
