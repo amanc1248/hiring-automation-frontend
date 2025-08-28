@@ -28,6 +28,7 @@ export interface WorkflowStepDetailPopulated {
   auto_start: boolean;
   required_human_approval: boolean;
   number_of_approvals_needed?: number;
+  approvers?: string[];  // ✅ Add approvers field
   status: 'awaiting' | 'finished' | 'rejected';
   order_number: number;
   created_at: string;

@@ -397,7 +397,7 @@ export const workflowService = {
           config: {
             delayBeforeExecution: Math.floor((stepDetail.delay_in_seconds || 0) / 3600), // Convert seconds to hours
             requiresApproval: stepDetail.required_human_approval,
-            approvers: [], // We don't have approver names in the API response
+            approvers: stepDetail.approvers || [], // ✅ Use approver IDs from API response
             autoProceed: stepDetail.auto_start
           },
           aiEmail: {
