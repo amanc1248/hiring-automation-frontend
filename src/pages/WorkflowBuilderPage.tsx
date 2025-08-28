@@ -39,12 +39,10 @@ const WorkflowBuilderPage = () => {
     steps: [] as Array<{
       name: string
       display_name?: string  // Human-readable description for UI
-      description: string    // Full AI prompt for execution
       type: 'resume_analysis' | 'human_approval' | 'task_assignment' | 'task_review' | 'interview_scheduling' | 'ai_interview' | 'offer_letter' | 'custom'
       delayHours: number
       requiresApproval: boolean
       approvers: string[]
-
       autoStart: boolean
     }>
   })
@@ -52,12 +50,10 @@ const WorkflowBuilderPage = () => {
   const [newStep, setNewStep] = useState({
     name: '',
     display_name: '',
-    description: '',
     type: 'resume_analysis' as 'resume_analysis' | 'human_approval' | 'task_assignment' | 'task_review' | 'interview_scheduling' | 'ai_interview' | 'offer_letter' | 'custom',
     delayHours: 0,
     requiresApproval: false,
     approvers: [] as string[],
-
     autoStart: false
   })
 
@@ -162,8 +158,8 @@ const WorkflowBuilderPage = () => {
 
 
   const handleAddStep = () => {
-    if (!newStep.description.trim()) {
-      alert('Please enter a step description.')
+    if (!newStep.display_name?.trim()) {
+      alert('Please enter a display name for the step.')
       return
     }
 
@@ -175,12 +171,10 @@ const WorkflowBuilderPage = () => {
     setNewStep({
       name: '',
       display_name: '',
-      description: '',
       type: 'resume_analysis',
       delayHours: 0,
       requiresApproval: false,
       approvers: [],
-  
       autoStart: false
     })
   }
@@ -197,12 +191,10 @@ const WorkflowBuilderPage = () => {
     setNewStep({
       name: step.name,
       display_name: step.display_name || '',
-      description: step.description,
       type: step.type,
       delayHours: step.delayHours,
       requiresApproval: step.requiresApproval,
       approvers: step.approvers,
-
       autoStart: step.autoStart || false
     })
     setEditingStepIndex(index)
@@ -212,8 +204,8 @@ const WorkflowBuilderPage = () => {
   const handleUpdateStep = () => {
     if (editingStepIndex === null) return
     
-    if (!newStep.description.trim()) {
-      alert('Please enter a step description.')
+    if (!newStep.display_name?.trim()) {
+      alert('Please enter a display name for the step.')
       return
     }
 
@@ -244,7 +236,6 @@ const WorkflowBuilderPage = () => {
     setNewStep({
       name: '',
       display_name: '',
-      description: '',
       type: 'resume_analysis',
       delayHours: 0,
       requiresApproval: false,
@@ -270,7 +261,7 @@ const WorkflowBuilderPage = () => {
       steps: template.steps.map(step => ({
         name: step.name,
         display_name: step.display_name || '',
-        description: step.description,
+
         type: step.type,
         delayHours: step.config.delayBeforeExecution || 0,
         requiresApproval: step.config.requiresApproval,
@@ -552,16 +543,7 @@ const WorkflowBuilderPage = () => {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Description</label>
-                      <input
-                        type="text"
-                        value={newStep.description}
-                        onChange={(e) => setNewStep(prev => ({ ...prev, description: e.target.value }))}
-                        className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-smooth"
-                        placeholder="What does this step do?"
-                      />
-                    </div>
+
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-2">
