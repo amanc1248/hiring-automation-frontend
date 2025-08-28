@@ -146,7 +146,7 @@ const ApprovalsPage = () => {
           
           <div>
             <span className="font-medium text-muted-foreground">Step Details:</span>
-            <p className="text-sm mt-1">{approval.step_description}</p>
+            <p className="text-sm mt-1">{approval.step_display_name}</p>
           </div>
           
           <div className="flex items-center justify-between text-sm text-muted-foreground">

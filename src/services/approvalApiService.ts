@@ -21,6 +21,7 @@ export interface ApprovalRequest {
   // Workflow step information
   step_name: string
   step_description: string
+  step_display_name?: string
   step_type: string
   
   // Candidate information
@@ -62,7 +63,7 @@ class ApprovalApiService {
    */
   async getPendingApprovals(): Promise<ApprovalRequestsList> {
     const response = await apiClient.get('/api/approvals/pending')
-    return response.data
+    return response.data as ApprovalRequestsList
   }
 
   /**
@@ -70,17 +71,16 @@ class ApprovalApiService {
    */
   async submitApprovalResponse(submission: ApprovalSubmission): Promise<ApprovalSubmissionResponse> {
     const response = await apiClient.post('/api/approvals/respond', submission)
-    return response.data
+    return response.data as ApprovalSubmissionResponse
   }
 
   /**
    * Get approval history for the current user
    */
   async getApprovalHistory(limit: number = 50, offset: number = 0): Promise<ApprovalRequest[]> {
-    const response = await apiClient.get('/api/approvals/history', {
-      params: { limit, offset }
-    })
-    return response.data
+    const endpoint = `/api/approvals/history?limit=${limit}&offset=${offset}`
+    const response = await apiClient.get(endpoint)
+    return response.data as ApprovalRequest[]
   }
 
   /**
