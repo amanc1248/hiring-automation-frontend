@@ -119,17 +119,35 @@ class GmailApiService {
           return
         }
 
-        // Listen for popup messages or URL changes
-        const checkClosed = setInterval(() => {
-          if (popup.closed) {
-            clearInterval(checkClosed)
-            // Check if we got a success URL parameter
-            const urlParams = new URLSearchParams(window.location.search)
-            const success = urlParams.get('success')
-            const email = urlParams.get('email')
-            const error = urlParams.get('error')
+        // Initialize timeout and interval IDs
+        let timeoutId: ReturnType<typeof setTimeout>
+        let checkClosedInterval: ReturnType<typeof setInterval>
 
-            if (success === 'true' && email) {
+        // Listen for messages from the popup
+        const messageHandler = (event: MessageEvent) => {
+          console.log('🔍 [Gmail OAuth] Received message:', event.origin, event.data)
+          
+          // Only accept messages from our own origin or the backend
+          if (event.origin !== window.location.origin && 
+              !event.origin.includes('localhost:8000') &&
+              !event.origin.includes('hr-automation-backend-production')) {
+            console.log('🔍 [Gmail OAuth] Origin not allowed:', event.origin)
+            return
+          }
+
+          const { type, success, email, error } = event.data
+          console.log('🔍 [Gmail OAuth] Message type:', type, 'Success:', success, 'Email:', email, 'Error:', error)
+
+          if (type === 'gmail-oauth-result') {
+            // Clean up
+            window.removeEventListener('message', messageHandler)
+            if (popup && !popup.closed) {
+              popup.close()
+            }
+            clearTimeout(timeoutId)
+            clearInterval(checkClosedInterval)
+
+            if (success && email) {
               resolve({ success: true, email })
             } else if (error) {
               resolve({ success: false, error: this.getErrorMessage(error) })
@@ -137,14 +155,34 @@ class GmailApiService {
               resolve({ success: false, error: 'OAuth flow was cancelled or incomplete' })
             }
           }
+        }
+
+        window.addEventListener('message', messageHandler)
+
+        // Fallback: Check if popup was closed manually (user cancelled)
+        checkClosedInterval = setInterval(() => {
+          try {
+            if (popup.closed) {
+              console.log('🔍 [Gmail OAuth] Popup closed by user')
+              clearInterval(checkClosedInterval)
+              window.removeEventListener('message', messageHandler)
+              clearTimeout(timeoutId)
+              resolve({ success: false, error: 'OAuth flow was cancelled by user' })
+            }
+          } catch (e) {
+            // Cross-origin error, popup might be on different domain
+            // This is expected during OAuth flow
+            console.log('🔍 [Gmail OAuth] Cross-origin check (expected):', e)
+          }
         }, 1000)
 
         // Timeout after 5 minutes
-        setTimeout(() => {
-          if (!popup.closed) {
+        timeoutId = setTimeout(() => {
+          if (popup && !popup.closed) {
             popup.close()
           }
-          clearInterval(checkClosed)
+          clearInterval(checkClosedInterval)
+          window.removeEventListener('message', messageHandler)
           resolve({ success: false, error: 'OAuth flow timed out' })
         }, 5 * 60 * 1000)
       })
